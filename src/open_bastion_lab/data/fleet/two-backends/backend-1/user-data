@@ -1,0 +1,17 @@
+#cloud-config
+users:
+- name: maintainer
+  sudo: ALL=(ALL) NOPASSWD:ALL
+  groups: sudo
+  shell: /bin/bash
+  passwd: $6$NCYwCMbdTVjFJi5z$klKlJ64p7FF3GzaxUhid/MGN3dODGB1eKAZmzymDWGM3fDiqwBOjlALtcqMr.mnaInW41UIi1IKOdB/Zo/xGe.
+  lock_passwd: false
+  ssh_authorized_keys: []
+locale: en_US.UTF-8
+timezone: UTC
+package_update: true
+packages:
+- qemu-guest-agent
+- openssh-server
+runcmd:
+- systemctl enable --now qemu-guest-agent

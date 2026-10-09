@@ -1,0 +1,10 @@
+# Python virtual environment, cache
+/.venv
+__pycache__
+
+# ob-builder artifcats
+/ansible
+/shell
+
+# Machines data
+/machines/data

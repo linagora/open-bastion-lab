@@ -1,0 +1,31 @@
+[project]
+name = "open-bastion-lab"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+authors = [
+    { name = "Matthias Meulien", email = "mmeulien@linagora.com" }
+]
+requires-python = ">=3.13"
+dependencies = [
+    "aiohttp>=3.14.5",
+    "ansible>=14.5.0",
+    "pyyaml>=6.0.3",
+]
+
+[project.scripts]
+ob-lab = "open_bastion_lab.cli:main"
+
+[build-system]
+requires = ["uv_build>=0.12.24,<0.13.0"]
+build-backend = "uv_build"
+
+[dependency-groups]
+dev = [
+    "black>=26.10.0",
+    "mypy>=2.4.0",
+]
+
+[[tool.mypy.overrides]]
+module = ["libvirt.*"]
+follow_untyped_imports = true
