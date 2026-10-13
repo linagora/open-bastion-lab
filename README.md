@@ -122,7 +122,7 @@ Worth noting:
   during the machines lifecycle. Don't forget to cleanup the "known
   hosts" between a `delete` and a `create`:
   ``` bash
-  echo "2 66 67" | xargs -d' ' -i \
+  printf '%s\n' 2 66 67 | xargs -i \
        ssh-keygen -f ~/.ssh/known_hosts -R 192.168.122.{}
   ```
 * A single account `maintainer` with password `password` is created
@@ -183,7 +183,8 @@ Use `-F ./examples/ssh_config` when testing with users `dwo`,
 ### Ansible
 
 Make sure the "known hosts" file is properly populated so user can
-connect through SSH without password.
+connect through SSH without password to any host in the generated
+fleet.
 
 Update the value of the `public_key_file` key in
 [examples/ob-builder-local](./examples/ob-builder-local.yml): An
