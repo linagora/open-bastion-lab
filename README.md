@@ -187,8 +187,7 @@ connect through SSH without password to any host in the generated
 fleet.
 
 Update the value of the `public_key_file` key in
-[examples/ob-builder-local](./examples/ob-builder-local.yml): An
-absolute path is expected.
+[examples/ob-builder-local](./examples/ob-builder-local.yml) to the key used in the configuration file.
 
 At the root of the lab repository:
 
@@ -210,9 +209,9 @@ to enroll the fleet:
 ssh -t maintainer@192.168.122.2 \
     'sudo OB_CLIENT_SECRET=pamsecret ob-enroll -g bastion'
 ssh -t maintainer@192.168.122.66 \
-    'sudo OB_CLIENT_SECRET=pamsecret ob-enroll -g bastion'
+    'sudo OB_CLIENT_SECRET=pamsecret ob-enroll -g backend'
 ssh -t maintainer@192.168.122.67 \
-    'sudo OB_CLIENT_SECRET=pamsecret ob-enroll -g bastion'
+    'sudo OB_CLIENT_SECRET=pamsecret ob-enroll -g backend'
 ```
 
 Then replay the playbook with the setup step enabled:
