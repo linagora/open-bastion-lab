@@ -84,7 +84,12 @@ Install the package (add `--link-mode symlink` for an editable installation):
 
 ```bash
 uv sync open-bastion-lab
+source .venv/bin/activate
 ```
+
+The created Python virtual environment has all dependencies installed,
+don't forget to enable the environment before `ob-lab` calls (or prefix
+with `uv run`).
 
 Then start the default machine fleet with:
 ```bash
