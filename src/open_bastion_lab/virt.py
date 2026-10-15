@@ -379,6 +379,9 @@ class LibvirtProxy(HypervisorProxy):
             <console type='pty'>
               <target type='serial' port='0'/>
             </console>
+            <channel type='unix'>
+              <target type='virtio' name='org.qemu.guest_agent.0'/>
+            </channel>
             <graphics type='spice' autoport='yes'/>
             <video>
               <model type='virtio'/>
