@@ -67,6 +67,7 @@ def load_config(*, fleet: str) -> Config:
     if not fleet_config.is_file():
         raise RuntimeError(f"No fleet with name {fleet}")
 
+    raw["fleet"] = fleet
     raw.update(tomllib.loads(fleet_config.read_text()))
 
     config = Config.from_any_keywords(**raw)
