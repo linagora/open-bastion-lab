@@ -24,7 +24,7 @@ Create a storage pool:
 ```bash
 sudo virsh pool-define-as default dir --target /var/lib/libvirt/images
 sudo virsh pool-build default
-sudo virrid pool-start default
+sudo virsh pool-start default
 sudo virsh pool-autostart default
 ```
 
@@ -95,10 +95,11 @@ EOF
 created machines for a service account to be able to connect through
 SSH. You may not want to use production keys for that purpose.
 
-Install the package (add `--link-mode symlink` for an editable installation):
+Install the package and its dependencies (the package itself is
+installed in editable mode):
 
 ```bash
-uv sync open-bastion-lab
+uv sync
 source .venv/bin/activate
 ```
 
@@ -187,12 +188,12 @@ docker compose up -d
 ob-builder --config ob-builder-local.yml \
            --output-shell shell
 
-scp shell/bootstrap-local-bastion.sh 192.168.122.2:/tmp
+scp shell/bootstrap-local-bastion.sh maintainer@192.168.122.2:/tmp
 
-ssh 192.168.122.2 'sudo /tmp/bootstrap-local-bastion.sh'
+ssh maintainer@192.168.122.2 'sudo /tmp/bootstrap-local-bastion.sh'
 ```
 
-Use `-F ./examples/ssh_config` when testing with users `dwo`,
+Use `-F ./examples/ssh_config` when testing with users `dwho`,
 `rtyler`, etc.
 
 ### Ansible
