@@ -15,3 +15,10 @@ packages:
 - openssh-server
 runcmd:
 - systemctl enable --now qemu-guest-agent
+write_files:
+# The seed is only reachable over the network: without this, cloud-init
+# falls back to DHCP on every boot after the first one and never
+# restores the static configuration.
+- path: /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
+  content: |
+    network: {config: disabled}
