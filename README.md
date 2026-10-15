@@ -137,6 +137,13 @@ Worth noting:
   block of 64 addresses and the first address of the subnet (`.1`) is left
   to the host. The addresses are served to the guests by `ob-lab` itself,
   when it provisions them.
+
+  The static address is applied by `cloud-init` which fetch its
+  configuration through the network; So each domain uses a temporary
+  IP obtained by DHCP at early boot until `cloud-init` reconfigures the
+  network interface. One can fix the early IPs through the default
+  network configuration.
+
 * The server SSH key is generated during the first boot. So it changes
   during the machines lifecycle. Don't forget to cleanup the "known
   hosts" between a `delete` and a `create`:
@@ -188,7 +195,9 @@ docker compose up -d
 The LLNG provided by these demos have  the required plugins installed
 and are fully configured for different scenarios.
 
-For a bare LLNG, one can use [examples/docker-compose.yml](./examples/docker-compose.yml).
+For a bare LLNG, one can use
+[examples/docker-compose.yml](./examples/docker-compose.yml). Configuration ready to import are
+available in [examples/llng](./examples/llng).
 
 ### Shell
 
