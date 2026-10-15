@@ -15,6 +15,8 @@ we want to test in a representative environment.
 
 * [uv](https://docs.astral.sh/uv/)
 * `libvirt`
+* A C compiler, `pkg-config` and the `libvirt` development files
+  (`libvirt-dev` on Debian) to build the `libvirt-python` binding
 
 Make sure the user is in the `libvirt` group and `export
 LIBVIRT_DEFAULT_URI=qemu:///system`.

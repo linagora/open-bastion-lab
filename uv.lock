@@ -604,6 +604,12 @@ wheels = [
 ]
 
 [[package]]
+name = "libvirt-python"
+version = "12.8.0"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/6c/9e/7211301d1d53acfaa5f99bec4af279e575c31e0aca7e2fe84a5aaa73d8f9/libvirt_python-12.8.0.tar.gz", hash = "sha256:ab24a102ebf99b913ddc3459031aa71a48b0b1cdbb0f423b4ea278052791ac8a", size = 256610, upload-time = "2026-10-01T09:08:40.762Z" }
+
+[[package]]
 name = "markupsafe"
 version = "3.0.4"
 source = { registry = "https://pypi.org/simple" }
@@ -884,6 +890,7 @@ dependencies = [
     { name = "aiohttp" },
     { name = "ansible" },
     { name = "platformdirs" },
+    { name = "libvirt-python" },
     { name = "pyyaml" },
 ]
 
@@ -898,6 +905,7 @@ requires-dist = [
     { name = "aiohttp", specifier = ">=3.14.5" },
     { name = "ansible", specifier = ">=14.5.0" },
     { name = "platformdirs", specifier = ">=4.12.4" },
+    { name = "libvirt-python", specifier = ">=12.8.0" },
     { name = "pyyaml", specifier = ">=6.0.3" },
 ]
 
