@@ -289,7 +289,7 @@ class LibvirtProxy(HypervisorProxy):
 
         """
         pool = self._get_storage_pool()
-        name = machine.name
+        name = f"{machine.name}.qcow2"
         try:
             vol = pool.storageVolLookupByName(name)
             return Path(vol.path())
@@ -302,7 +302,7 @@ class LibvirtProxy(HypervisorProxy):
         virtual_size_gib = DISK_VIRTUAL_SIZE_GIB
         xml = f"""
         <volume type='file'>
-          <name>{name}.qcow2</name>
+          <name>{name}</name>
           <capacity unit='GiB'>{virtual_size_gib}</capacity>
           <allocation unit='B'>0</allocation>
           <target>
@@ -319,7 +319,7 @@ class LibvirtProxy(HypervisorProxy):
           </backingStore>
         </volume>
         """
-        vol = pool.createXML(xml, libvirt.VIR_STORAGE_POOL_BUILD_NO_OVERWRITE)
+        vol = pool.createXML(xml, 0)
         return Path(vol.path())
 
     async def _define_domain(
