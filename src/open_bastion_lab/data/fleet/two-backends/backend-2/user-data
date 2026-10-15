@@ -7,7 +7,7 @@ users:
   ssh_authorized_keys: []
   passwd: $6$NCYwCMbdTVjFJi5z$klKlJ64p7FF3GzaxUhid/MGN3dODGB1eKAZmzymDWGM3fDiqwBOjlALtcqMr.mnaInW41UIi1IKOdB/Zo/xGe.
   lock_passwd: false
-locale: en_US.UTF-8
+locale: C.UTF-8
 timezone: UTC
 package_update: true
 packages:
