@@ -80,6 +80,10 @@ fleet = "two-backends"
 EOF
 ```
 
+💡 The SSH public keys listed in `authorized_keys` will end up in the
+created machines for a service account to be able to connect through
+SSH. You may not want to use production keys for that purpose.
+
 Install the package (add `--link-mode symlink` for an editable installation):
 
 ```bash
@@ -97,7 +101,7 @@ ob-lab start
 ob-lab check
 ```
 
-💡The start command relies on a temporarily HTTP server listening on
+💡 The start command relies on a temporarily HTTP server listening on
 port 8001. It can be changed through the
 `~/.config/open-bastion-lab/config.toml` file.
 
@@ -147,7 +151,7 @@ dpkg-scanpackages -m . /dev/null > Packages && gzip -kf Packages
 python3 -m http.server 8000 --directory /srv/ob-lab
 ```
 
-💡In case port 8000 is already used, make sure to update the port in
+💡 In case port 8000 is already used, make sure to update the port in
 subsequent commands and configuration files, eg
 [examples/inventory](./examples/inventory.yaml).
 
