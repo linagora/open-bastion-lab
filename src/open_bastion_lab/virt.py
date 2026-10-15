@@ -25,7 +25,7 @@ type Domains = dict[Role, list[str]]
 
 def _libvirt_error_handler(
     logger: logging.Logger,
-    error: list
+    error: tuple[int, int, str, int, str, str | None, str | None, int, int] | list[Any]
 ) -> None:
     code, domain, message, level, *_ = error
     logger.debug(
@@ -119,7 +119,7 @@ class LibvirtProxy(HypervisorProxy):
         else:
             info = domain.info()
             try:
-                state = _convert_libvirt_state(info[0])
+                state = _convert_libvirt_state(int(info[0]))
             except UnsupportedDomainState:
                 machine.state = MachineState.UNKNOWN
                 LOGGER.warning("Unsupported machine state %s %s", name, info[0])
