@@ -36,8 +36,10 @@ sudo virsh net-start default 2>/dev/null || true
 sudo virsh net-autostart default
 ```
 
-Check the default network covers the 192.168.122.0/24 range (for
-example with `virsh net-dumpxml`), DHCP is not required:
+Edit the default virtual network to make sure it covers the
+192.168.122.0/24 range and to add the `<dns>` element for domains to
+resolve the LLNG services by name (use `virsh net-edit default`,
+followed by `virsh net-destroy default && virsh net-start default`):
 
 ```xml
 <network>
@@ -51,6 +53,15 @@ example with `virsh net-dumpxml`), DHCP is not required:
       <range start='192.168.122.2' end='192.168.122.254'/>
     </dhcp>
   </ip>
+  <dns>
+    <host ip='192.168.122.1'>
+      <hostname>auth.example.com</hostname>
+      <hostname>manager.example.com</hostname>
+      <hostname>reload.example.com</hostname>
+      <hostname>test1.example.com</hostname>
+      <hostname>test2.example.com</hostname>
+    </host>
+  </dns>
 </network>
 ```
 
@@ -160,7 +171,7 @@ subsequent commands and configuration files, eg
 Make sure `/etc/hosts` contains a line:
 
 ```
-192.168.122.1 example.com sso.example.com
+192.168.122.1 auth.example.com manager.example.com reload.example.com test1.example.com test2.example.com
 ```
 
 The `open-bastion` Git repository has demos one can use, eg:
