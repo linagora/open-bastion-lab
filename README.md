@@ -185,6 +185,11 @@ pushd docker-demo-maxsec
 docker compose up -d
 ```
 
+The LLNG provided by these demos have  the required plugins installed
+and are fully configured for different scenarios.
+
+For a bare LLNG, one can use [examples/docker-compose.yml](./examples/docker-compose.yml).
+
 ### Shell
 
 ```bash
@@ -202,8 +207,8 @@ Use `-F ./examples/ssh_config` when testing with users `dwho`,
 ### Ansible
 
 Make sure the "known hosts" file is properly populated so user can
-connect through SSH without password to any host in the generated
-fleet.
+connect through SSH to the `maintainer` account without password on any
+host in the generated fleet.
 
 Update the value of the `public_key_file` key in
 [examples/ob-builder-local](./examples/ob-builder-local.yml) to the key used in the configuration file.
@@ -215,7 +220,9 @@ mkdir -p ansible; cd ansible
 ob-builder --config ../examples/ob-builder-local.yml --output-ansible .
 ```
 
-Play the playbook to install `open-bastion` and its requirements:
+Adapt the [examples/inventory.yaml](./examples/inventory.yaml) file to the LLNG configuration (it
+makes the assumption of two OIDC RPs `pam-bastion` and `pam-access`). Play
+the playbook to install `open-bastion` and its requirements:
 
 ```bash
 ansible-playbook -i ../examples/inventory.yaml site.yml

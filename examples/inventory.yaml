@@ -9,7 +9,7 @@ all:
       vars:
         ob_role: bastion
         ob_server_group: bastion
-        ob_client_id: pam-access
+        ob_client_id: pam-bastion
         ob_client_secret: pamsecret
       hosts:
         bastion-1:

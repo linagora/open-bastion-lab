@@ -8,3 +8,9 @@ __pycache__
 
 # Machines data
 /machines/data
+
+# Data that optionally land in examples subdir
+/examples/oidc-private.pem
+/examples/oidc-public.pem
+/examples/ssh-ca.key
+/examples/ssh-ca.pub
