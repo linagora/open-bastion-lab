@@ -7,7 +7,7 @@
 deployment_slug: "local"
 # token-only | token+unix | keys+llng | mixed | max-security
 scenario: "max-security"
-portal_url: "http://sso.example.com"
+portal_url: "http://auth.example.com"
 # yes: allow an http:// portal and skip TLS verification, here and on the
 # targets (verify_ssl = false, ob-enroll/setup -k). Test setups only.
 insecure: "yes"
@@ -45,7 +45,7 @@ ansible_auto_approve: "no"
 # when a service account has a public key)
 # service_keys: true
 
-apt_url: "https://linagora.github.io/open-bastion"
+apt_url: "https://192.168.122.1:8000"
 apt_suite: "trixie"
 apt_component: "main"
 # repo_keyring: /usr/share/open-bastion-builder/keyrings/open-bastion-linagora.gpg
