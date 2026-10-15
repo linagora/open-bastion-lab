@@ -260,7 +260,7 @@ class LibvirtProxy(HypervisorProxy):
             if p is None:
                 continue
             try:
-                vol = self.conn.storageVolLookupByPath(p)
+                vol = self.conn.storageVolLookupByPath(str(p))
                 vol.delete()
             except libvirt.libvirtError:
                 LOGGER.warning("Failed to remove storage %s", p)
