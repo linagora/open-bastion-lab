@@ -84,7 +84,7 @@ class InstanceMetadataServer:
         if body is None:
             raise web.HTTPNotFound()
 
-        self._seeded[name].collect(name)
+        self._seeded[name].collect(kind)
         return web.Response(
             text=body,
             content_type="text/cloud-config" if kind == "user-data" else "text/yaml",
