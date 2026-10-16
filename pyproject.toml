@@ -26,8 +26,20 @@ build-backend = "uv_build"
 dev = [
     "black>=26.10.0",
     "mypy>=2.4.0",
+    "pytest>=9.1.1",
+    "pytest-bdd>=9.0.0",
 ]
 
 [[tool.mypy.overrides]]
 module = ["libvirt.*"]
 follow_untyped_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["open_bastion_tests"]
+# pytest-bdd registers a step as a fixture, and pytest only shows the
+# fixtures of a module to its own tests: the steps of the suite are loaded as
+# a plugin, which needs the root of the project on the path to be importable.
+addopts = "-p open_bastion_tests.steps.ssh_access"
+pythonpath = ["."]
+bdd_features_base_dir = "open_bastion_tests/features"
+log_cli_level = "INFO"

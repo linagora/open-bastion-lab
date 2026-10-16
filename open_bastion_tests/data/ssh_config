@@ -1,0 +1,16 @@
+# dwho, rtyler, etc. uses their own identity file
+
+Host bastion-1
+    HostName 192.168.122.2
+    IdentityFile "~/.ssh/id_%r"
+    IdentitiesOnly yes
+
+Host backend-1
+    HostName 192.168.122.66
+    IdentityFile "~/.ssh/id_%r"
+    IdentitiesOnly yes
+
+Host backend-2
+    HostName 192.168.122.67
+    IdentityFile "~/.ssh/id_%r"
+    IdentitiesOnly yes

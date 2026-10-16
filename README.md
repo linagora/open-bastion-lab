@@ -2,14 +2,16 @@
 
 Provide virtual infrastructure for functional testing of [open-bastion](https://github.com/linagora/open-bastion).
 
-Why not Docker? Because `open-bastion` relies heavily on systemd and
-we want to test in a representative environment.
+Why not Docker? Because `open-bastion` relies heavily on systemd and we
+want to test in a representative environment the generated deployment
+artefacts, the real init, a fleet as a fleet (several machines,
+per-bastion server groups, `allowed_bastions`) and a portal whos e
+policy changes.
 
 ## Roadmap
 
 * A proxy to [proxmox](https://www.proxmox.com/en/) hypervisor
-* Reproducible functionnal tests based on [behave](https://behave.readthedocs.io/en/stable/)
-* More fleets
+* More fleets, more tests
 
 ## Pre-requisites
 
@@ -18,6 +20,8 @@ we want to test in a representative environment.
 * A C compiler, `pkg-config` and the `libvirt` and Python 3 development
   files (`libvirt-dev` and `python3-dev` on Debian) to build the
   `libvirt-python` binding
+
+### Libvirt configuration
 
 Make sure the user is in the `libvirt` group and `export
 LIBVIRT_DEFAULT_URI=qemu:///system`.
@@ -80,7 +84,50 @@ sudo chmod 0440 /var/lib/libvirt/images/debian-13-generic-amd64.qcow2
 ```
 No other command should require elevated privileges.
 
-## Machines
+### Build dev packages and serve locally
+
+At the root of a local clone of `open-bastion` Git repository:
+
+```bash
+./scripts/build-dev-deb
+sudo mkdir -p /srv/ob-lab && sudo chown ${USER}:${USER} /srv/ob-lab
+mv ../open-bastion*_0.*.deb /srv/ob-lab/
+cd /srv/ob-lab
+dpkg-scanpackages -m . /dev/null > Packages && gzip -kf Packages
+python3 -m http.server 8000 --directory /srv/ob-lab
+```
+
+💡 In case port 8000 is already used, make sure to update the port in
+subsequent commands and configuration files, eg
+[examples/inventory](./examples/inventory.yaml).
+
+## Automatic functional tests
+
+All the test material is located in [open_bastion_tests](./open_bastion_tests): scenarios in
+`features/`, the tests binding them in `tests/`, the steps implementing
+them in `steps/`, and copies of everything they need in `data/`. It relies
+on [pytest-bdd](https://pytest-bdd.readthedocs.io/en/stable/).
+
+```bash
+uv sync
+source .venv/bin/activate
+pytest
+```
+
+⚠️ The tests take the lab over: they create the fleet, snapshot it, deploy
+open-bastion on it and delete it at the end, and they run their own LLNG
+container. Free the lab first (`ob-lab delete`, then `docker compose
+-f open_bastion_tests/data/llng/docker-compose.yml down -v`) and see
+[open_bastion_tests/README.md](./open_bastion_tests/README.md) for what they
+need, what they do and what they leave behind.
+
+⏰ Test can be long to execute…
+
+## Manually testing Open Bastion
+
+What the tests perform automatically by hand.
+
+### Machines
 
 Create the configuration file (adapt to point to an existing SSH public key):
 
@@ -157,25 +204,6 @@ Worth noting:
 * Login through the console is available through `virsh console DOMAIN`
 * The SSH service is listening and the keys specified in the
   configuration file allow `maintainer` to connect without password
-
-## Testing Open Bastion
-
-### Build dev package and serve locally
-
-At the root of a local clone of `open-bastion` Git repository:
-
-```bash
-./scripts/build-dev-deb
-sudo mkdir -p /srv/ob-lab && sudo chown ${USER}:${USER} /srv/ob-lab
-mv ../open-bastion*_0.*.deb /srv/ob-lab/
-cd /srv/ob-lab
-dpkg-scanpackages -m . /dev/null > Packages && gzip -kf Packages
-python3 -m http.server 8000 --directory /srv/ob-lab
-```
-
-💡 In case port 8000 is already used, make sure to update the port in
-subsequent commands and configuration files, eg
-[examples/inventory](./examples/inventory.yaml).
 
 ### LLNG
 

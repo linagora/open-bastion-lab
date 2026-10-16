@@ -1,0 +1,228 @@
+"""A user of the fleet and the SSH connection it may or may not get."""
+
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Protocol
+
+import logging
+import subprocess
+
+from open_bastion_tests.support import command
+
+LOGGER = logging.getLogger(__name__)
+
+CONNECT_TIMEOUT = 10
+AUTHENTICATION_REFUSED = "Permission denied"
+CONNECTION_CLOSED = "Connection closed by"
+
+
+class Connection(Protocol):
+    """What a scenario asks of a connection: it works, or the fleet said no."""
+
+    @property
+    def succeeded(self) -> bool: ...
+
+    @property
+    def denied(self) -> bool: ...
+
+    def describe(self) -> str: ...
+
+
+@dataclass
+class SshResult:
+    """What a connection attempt did."""
+
+    user: str
+    host: str
+    returncode: int
+    stdout: str
+    stderr: str
+    signed: bool
+    log: Path
+
+    @property
+    def succeeded(self) -> bool:
+        return self.returncode == 0
+
+    @property
+    def denied(self) -> bool:
+        """True when the machine refused to open a session.
+
+        A key it does not trust is answered with "Permission denied", a
+        user its PAM stack refuses with a closed connection. A machine that
+        cannot be reached answers neither, and does not count as a refusal.
+
+        """
+        return not self.succeeded and (
+            AUTHENTICATION_REFUSED in self.stderr or CONNECTION_CLOSED in self.stderr
+        )
+
+    def describe(self) -> str:
+        certificate = "signed" if self.signed else "not signed by the portal"
+        return (
+            f"ssh {self.user}@{self.host} returned {self.returncode}, "
+            f"key {certificate}\n"
+            f"{self.stderr.strip()}\nsee {self.log}"
+        )
+
+
+@dataclass
+class HopResult:
+    """What a hop from a bastion to a backend did."""
+
+    user: str
+    bastion: str
+    backend: str
+    reached_bastion: bool
+    returncode: int
+    stdout: str
+    stderr: str
+    log: Path
+
+    @property
+    def succeeded(self) -> bool:
+        return self.returncode == 0
+
+    @property
+    def denied(self) -> bool:
+        """True when the bastion opened a session and the hop did not happen.
+
+        A user the fleet refuses on the backend still gets its session on
+        the bastion, and ob-ssh fails there. A user it refuses on the
+        bastion never gets that far, which a backend scenario does not ask
+        about: the hop is not what failed.
+
+        """
+        return self.reached_bastion and not self.succeeded
+
+    def describe(self) -> str:
+        bastion = "reached" if self.reached_bastion else "not reached"
+        return (
+            f"ob-ssh {self.backend} from {self.bastion} as {self.user} returned "
+            f"{self.returncode}, bastion {bastion}\n"
+            f"{self.stderr.strip()}\nsee {self.log}"
+        )
+
+
+@dataclass
+class User:
+    """A user owning a key pair, and a certificate when the portal signs it."""
+
+    name: str
+    home: Path
+
+    @property
+    def key(self) -> Path:
+        return self.home / ".ssh" / f"id_{self.name}"
+
+    @property
+    def certificate(self) -> Path:
+        return self.key.with_name(f"{self.key.name}-cert.pub")
+
+    def generate_key(self) -> None:
+        """Create the key pair of the user, without any passphrase."""
+        self.key.parent.mkdir(parents=True, exist_ok=True)
+        result = command.run(
+            [
+                command.which("ssh-keygen"),
+                "-t",
+                "ed25519",
+                "-N",
+                "",
+                "-C",
+                f"{self.name}@ob-lab-tests",
+                "-f",
+                str(self.key),
+            ]
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"Failed to generate the key of {self.name}")
+
+    def public_key(self) -> str:
+        return self.key.with_suffix(".pub").read_text().strip()
+
+    def fingerprint(self) -> str:
+        """Fingerprint of the key, unique to it.
+
+        The portal refuses to sign twice under the same label, so the label
+        of a signature cannot be the name of the user alone.
+
+        """
+        result = command.run(
+            [command.which("ssh-keygen"), "-lf", str(self.key.with_suffix(".pub"))]
+        )
+        if result.returncode != 0:
+            raise RuntimeError(f"Failed to read the fingerprint of {self.key}")
+        return result.stdout.split()[1]
+
+    def save_certificate(self, certificate: str) -> None:
+        self.certificate.write_text(certificate.strip() + "\n")
+
+    def signed(self) -> bool:
+        return self.certificate.is_file()
+
+    def connect(self, host: str, ssh_config: Path) -> SshResult:
+        """Try to open a session on the given machine."""
+        log = self.home / f"connect-{host}.log"
+        result = self._run(host, ssh_config, "true", log)
+        LOGGER.debug("ssh %s@%s returned %s", self.name, host, result.returncode)
+        return SshResult(
+            user=self.name,
+            host=host,
+            returncode=result.returncode,
+            stdout=result.stdout,
+            stderr=result.stderr,
+            signed=self.signed(),
+            log=log,
+        )
+
+    def hop(self, bastion: str, backend: str, ssh_config: Path) -> HopResult:
+        """Reach a backend from a bastion, the way a user of the fleet would.
+
+        The bastion is asked for a session first: without one there is
+        nothing to hop from, and a backend scenario would read the failure
+        as the answer of the backend.
+
+        """
+        session = self.connect(bastion, ssh_config)
+        log = self.home / f"hop-{bastion}-{backend}.log"
+        result = self._run(bastion, ssh_config, f"ob-ssh {backend} -- true", log)
+        LOGGER.debug(
+            "ob-ssh %s from %s as %s returned %s",
+            backend,
+            bastion,
+            self.name,
+            result.returncode,
+        )
+        return HopResult(
+            user=self.name,
+            bastion=bastion,
+            backend=backend,
+            reached_bastion=session.succeeded,
+            returncode=result.returncode,
+            stdout=result.stdout,
+            stderr=result.stderr,
+            log=log,
+        )
+
+    def _run(
+        self, host: str, ssh_config: Path, remote: str, log: Path
+    ) -> subprocess.CompletedProcess[str]:
+        args = [
+            command.which("ssh"),
+            "-F",
+            str(ssh_config),
+            "-o",
+            f"UserKnownHostsFile={self.home / '.ssh' / 'known_hosts'}",
+            "-o",
+            "StrictHostKeyChecking=accept-new",
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            f"ConnectTimeout={CONNECT_TIMEOUT}",
+            f"{self.name}@{host}",
+            remote,
+        ]
+        result = command.run(args, timeout=120.0)
+        command.write_log(log, args, result)
+        return result
