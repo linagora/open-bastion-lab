@@ -258,7 +258,8 @@ class LibvirtProxy(HypervisorProxy):
             else:
                 LOGGER.exception("Failed to lookup domain %s", machine.name)
             return False
-        state, _ = domain.state()
+        # libvirt declares a str, the call returns (state, reason).
+        state, _ = domain.state()  # type: ignore[str-unpack]
         if state == libvirt.VIR_DOMAIN_RUNNING:
             LOGGER.debug("Domain already running %s", machine.name)
             return True
@@ -284,7 +285,8 @@ class LibvirtProxy(HypervisorProxy):
             else:
                 LOGGER.exception("Failed to lookup domain %s", machine.name)
                 return False
-        state, _ = domain.state()
+        # libvirt declares a str, the call returns (state, reason).
+        state, _ = domain.state()  # type: ignore[str-unpack]
         if state == libvirt.VIR_DOMAIN_SHUTOFF:
             LOGGER.debug("Domain already shutdown %s", machine.name)
             return True
@@ -318,7 +320,8 @@ class LibvirtProxy(HypervisorProxy):
             else:
                 LOGGER.exception("Failed to lookup domain %s", name)
                 return False
-        state, _ = domain.state()
+        # libvirt declares a str, the call returns (state, reason).
+        state, _ = domain.state()  # type: ignore[str-unpack]
         if state != libvirt.VIR_DOMAIN_SHUTOFF:
             domain.shutdown()
         tries = 0
