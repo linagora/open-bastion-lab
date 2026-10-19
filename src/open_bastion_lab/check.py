@@ -28,6 +28,6 @@ class CheckCommand(Command):
             elif machine.state == MachineState.UNKNOWN:
                 state = "❓"
             ip_trailer = machine.ip if machine.ip is not None else "Unknown IP"
-            print(f"- {state} {machine.name} ({ip_trailer})")
+            print(f"- {state} {machine.name} {machine.state} ({ip_trailer})")
 
         return 0
