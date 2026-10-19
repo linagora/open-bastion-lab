@@ -21,6 +21,10 @@ CONNECTION_CLOSED = "Connection closed by"
 HOP_STATUS = "__ob_ssh_status__"
 HOP_STATUS_PATTERN = re.compile(rf"{HOP_STATUS}=(\d+)")
 
+# Same for sudo, whose own status says whether the portal allowed it.
+SUDO_STATUS = "__ob_sudo_status__"
+SUDO_STATUS_PATTERN = re.compile(rf"{SUDO_STATUS}=(\d+)")
+
 
 class Connection(Protocol):
     """What a scenario asks of a connection: it works, or the fleet said no."""
@@ -109,6 +113,40 @@ class HopResult:
         return (
             f"ob-ssh {self.backend} from {self.bastion} as {self.user} "
             f"({status}), bastion {bastion}, ssh exit {self.returncode}\n"
+            f"{self.stdout.strip()}\n{self.stderr.strip()}\nsee {self.log}"
+        )
+
+
+@dataclass
+class SudoResult:
+    """What a sudo attempt on a machine did."""
+
+    user: str
+    host: str
+    status: int | None
+    stdout: str
+    stderr: str
+    log: Path
+
+    @property
+    def succeeded(self) -> bool:
+        """True when the machine ran sudo and it worked."""
+        return self.status == 0
+
+    @property
+    def denied(self) -> bool:
+        """True when the machine ran sudo and refused it.
+
+        A machine the user cannot reach at all reports no status, and does
+        not count as a refusal.
+
+        """
+        return self.status is not None and self.status != 0
+
+    def describe(self) -> str:
+        status = "no status" if self.status is None else f"sudo exit {self.status}"
+        return (
+            f"sudo as {self.user} on {self.host} ({status})\n"
             f"{self.stdout.strip()}\n{self.stderr.strip()}\nsee {self.log}"
         )
 
@@ -227,6 +265,50 @@ class User:
             reached_bastion=session.succeeded,
             status=status,
             returncode=result.returncode,
+            stdout=result.stdout,
+            stderr=result.stderr,
+            log=log,
+        )
+
+    def sudo(self, host: str, token: str, ssh_config: Path) -> SudoResult:
+        """Try to run sudo on the machine the user connects to."""
+        return self._sudo(host, host, self._sudo_command(token), ssh_config)
+
+    def sudo_from(
+        self, bastion: str, backend: str, token: str, ssh_config: Path
+    ) -> SudoResult:
+        """Try to run sudo on a backend the user reaches from a bastion."""
+        command = self._sudo_command(token)
+        return self._sudo(bastion, backend, f"ob-ssh {backend} '{command}'", ssh_config)
+
+    @staticmethod
+    def _sudo_command(token: str) -> str:
+        """The command that gives sudo the one-time token of the portal.
+
+        sudo asks for a password there; the token is what it expects, read
+        from stdin so nothing waits on a terminal.
+
+        """
+        return f'echo {token} | sudo -S true; echo "{SUDO_STATUS}=$?"'
+
+    def _sudo(
+        self, session_host: str, sudo_host: str, remote: str, ssh_config: Path
+    ) -> SudoResult:
+        """Run sudo where the session leads, and read its status.
+
+        The status is asked for in the output: the recorder of the bastion
+        reports its own status, not the one of the command.
+
+        """
+        log = self.home / f"sudo-{sudo_host}.log"
+        result = self._run(session_host, ssh_config, remote, log)
+        match = SUDO_STATUS_PATTERN.search(result.stdout)
+        status = int(match.group(1)) if match else None
+        LOGGER.debug("sudo as %s on %s returned %s", self.name, sudo_host, status)
+        return SudoResult(
+            user=self.name,
+            host=sudo_host,
+            status=status,
             stdout=result.stdout,
             stderr=result.stderr,
             log=log,

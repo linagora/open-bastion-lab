@@ -296,19 +296,33 @@ class Llng:
         return {str(group): str(rule) for group, rule in rules.items()}
 
     def set_pam_ssh_rules(self, rules: dict[str, str]) -> None:
-        """Give the portal new SSH rules, and make it serve them."""
+        """Give the portal new SSH rules."""
+        self._set_pam_rules("pamAccessSshRules", rules)
+
+    def set_pam_sudo_rules(self, rules: dict[str, str]) -> None:
+        """Give the portal new sudo rules."""
+        self._set_pam_rules("pamAccessSudoRules", rules)
+
+    def _set_pam_rules(self, key: str, rules: dict[str, str]) -> None:
+        """Set a rule set of the portal, one value per server group."""
         for group, rule in rules.items():
-            LOGGER.info("Rule of %s becomes %s", group, rule)
-            self._exec(
-                "lemonldap-ng-cli",
-                "-yes",
-                "1",
-                "addKey",
-                "pamAccessSshRules",
-                group,
-                rule,
-            )
+            LOGGER.info("%s.%s becomes %r", key, group, rule)
+            self._exec("lemonldap-ng-cli", "-yes", "1", "addKey", key, group, rule)
         self._exec("lemonldap-ng-cli", "update-cache")
+
+    def pam_token(self, session: Session) -> str:
+        """Ask the portal for a one-time token, in place of a password.
+
+        The machines authenticate sudo through the portal: the user gives
+        the token the portal handed to a signed-in session, and the PAM
+        stack has it verified, once.
+
+        """
+        answer = session.post(f"{self.portal_url}/pam", {})
+        token = answer.get("token")
+        if not isinstance(token, str):
+            raise LlngError(f"The portal gave no token to {session.user}: {answer}")
+        return token
 
     def sign(self, session: Session, public_key: str, label: str, log: Path) -> str:
         """Ask the portal to sign a public key and return the certificate."""

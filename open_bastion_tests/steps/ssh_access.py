@@ -9,7 +9,13 @@ from pytest_bdd import given, parsers, then, when
 from open_bastion_tests.support.fleet import Fleet
 from open_bastion_tests.support.llng import Llng, Session
 from open_bastion_tests.support.playbook import Administrator
-from open_bastion_tests.support.ssh import Connection, HopResult, SshResult, User
+from open_bastion_tests.support.ssh import (
+    Connection,
+    HopResult,
+    SshResult,
+    SudoResult,
+    User,
+)
 
 
 @given(parsers.re(r'the fleet "(?P<name>[^"]+)" is ready'))
@@ -152,6 +158,21 @@ def administrator_sets_pam_access_ssh_rule(
     llng.set_pam_ssh_rules(rules)
 
 
+@given("the administrator set pam-access sudo rule to:")
+def administrator_sets_pam_access_sudo_rule(
+    datatable: list[list[str]],
+    llng: Llng,
+) -> None:
+    """Give the portal the sudo rules of the table, one row per server group.
+
+    Same as the SSH rules: neither the workers of the portal nor the
+    machines know the change yet.
+
+    """
+    rules = {group: rule for group, rule in datatable}
+    llng.set_pam_sudo_rules(rules)
+
+
 @given("the portal workers reloaded the configuration")
 def portal_workers_reload_configuration(llng: Llng) -> None:
     """Make every worker serve the rule the scenario just set.
@@ -204,6 +225,62 @@ def user_hops(
 
     """
     return user.hop(bastion, backend, user_ssh_config)
+
+
+@given(
+    parsers.re(r'user "?(?P<name>[\w.-]+)"? has a temporary token from the portal'),
+    target_fixture="token",
+)
+def user_has_a_temporary_token(
+    name: str,
+    user: User,
+    portal_sessions: Callable[[str], Session | None],
+    llng: Llng,
+) -> str:
+    """Get the one-time token sudo asks as a password.
+
+    The portal hands it to a signed-in session, and the PAM stack of the
+    machines consumes it at the first use.
+
+    """
+    if user.name != name:
+        pytest.fail(f"The feature names {name}, but the user is {user.name}")
+    session = portal_sessions(name)
+    if session is None:
+        pytest.fail(f"{name} has no session on the portal, there is no token to give")
+    return llng.pam_token(session)
+
+
+@when(
+    parsers.re(
+        r'user "?(?P<name>[\w.-]+)"? runs sudo on "(?P<host>[\w.-]+)" through SSH'
+    ),
+    target_fixture="connection",
+)
+def user_runs_sudo(
+    name: str, host: str, user: User, token: str, user_ssh_config: Path
+) -> SudoResult:
+    """Open a session on the machine and try to elevate there."""
+    return user.sudo(host, token, user_ssh_config)
+
+
+@when(
+    parsers.re(
+        r'user "?(?P<name>[\w.-]+)"? runs sudo on "(?P<backend>[\w.-]+)" '
+        r'from "(?P<bastion>[\w.-]+)" through SSH'
+    ),
+    target_fixture="connection",
+)
+def user_runs_sudo_from(
+    name: str,
+    backend: str,
+    bastion: str,
+    user: User,
+    token: str,
+    user_ssh_config: Path,
+) -> SudoResult:
+    """Open a session on the bastion and try to elevate on the backend."""
+    return user.sudo_from(bastion, backend, token, user_ssh_config)
 
 
 @then(parsers.parse("the result is {expected}"))

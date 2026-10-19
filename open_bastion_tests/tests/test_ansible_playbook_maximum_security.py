@@ -62,3 +62,18 @@ def test_backend_access_removed() -> None:
 @scenario(FEATURE, "A user whose access is removed can't reach the bastion")
 def test_bastion_access_removed() -> None:
     pass
+
+
+@scenario(FEATURE, "Sudo on the backends follows the rules of the portal")
+def test_sudo_on_backends() -> None:
+    pass
+
+
+@scenario(FEATURE, "A user allowed to sudo on the backends can't sudo on the bastion")
+def test_sudo_on_bastion() -> None:
+    pass
+
+
+@scenario(FEATURE, "A user whose sudo access is removed can't sudo")
+def test_sudo_removed() -> None:
+    pass

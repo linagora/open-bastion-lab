@@ -15,9 +15,6 @@ Feature: Ansible playbook for maximum security
     And an administrator runs ob-builder to generate an ansible playbook with the "ob-builder-max-security" configuration
     And the administrator plays the generated playbook against the fleet
 
-  # The scenarios that change the rules of the portal come last: the feature
-  # keeps the portal it was given, so the backend rule goes before the bastion
-  # one, which takes away the access a hop needs.
   Scenario Outline: Users known to the portal reach the bastion
     Given user <name> has signed its SSH public key
     When user <name> tries to connect to "bastion-1" through SSH
@@ -64,4 +61,31 @@ Feature: Ansible playbook for maximum security
     And the portal workers reloaded the configuration
     And the administrator drops the authorization cache of the fleet
     When user "rtyler" tries to connect to "bastion-1" through SSH
+    Then the result is fails
+
+  Scenario Outline: Sudo on the backends follows the rules of the portal
+    Given user <name> has signed its SSH public key
+    And user <name> has a temporary token from the portal
+    When user <name> runs sudo on "backend-2" from "bastion-1" through SSH
+    Then the result is <result>
+
+    Examples:
+      | name   | result  |
+      | rtyler | success |
+      | dwho   | fails   |
+
+  Scenario: A user allowed to sudo on the backends can't sudo on the bastion
+    Given user "rtyler" has signed its SSH public key
+    And user "rtyler" has a temporary token from the portal
+    When user "rtyler" runs sudo on "bastion-1" through SSH
+    Then the result is fails
+
+  Scenario: A user whose sudo access is removed can't sudo
+    Given user "rtyler" has signed its SSH public key
+    And user "rtyler" has a temporary token from the portal
+    And the administrator set pam-access sudo rule to:
+      | backend | 0 |
+    And the portal workers reloaded the configuration
+    And the administrator drops the authorization cache of the fleet
+    When user "rtyler" runs sudo on "backend-2" from "bastion-1" through SSH
     Then the result is fails
