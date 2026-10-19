@@ -37,10 +37,10 @@ follow_untyped_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["open_bastion_tests"]
-# pytest-bdd registers a step as a fixture, and pytest only shows the
-# fixtures of a module to its own tests: the steps of the suite are loaded as
-# a plugin, which needs the root of the project on the path to be importable.
-addopts = "-p open_bastion_tests.steps.ssh_access"
+addopts = "-p open_bastion_tests.steps.ssh_access -p open_bastion_tests.steps.debug -m 'not debug'"
+markers = [
+    "debug: configure the lab for debugging and wait on purpose",
+]
 pythonpath = ["."]
 bdd_features_base_dir = "open_bastion_tests/features"
 log_cli_level = "INFO"

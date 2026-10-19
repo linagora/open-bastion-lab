@@ -1,0 +1,37 @@
+"""A lab configured and kept for debugging."""
+
+import pytest
+from pytest_bdd import scenario
+
+from open_bastion_tests.support.fleet import Fleet, data
+from open_bastion_tests.support.llng import Llng
+
+FEATURE = "debug.feature"
+
+FLEET = "two-backends"
+LLNG_CONFIG = data("llng/with-two-oidc-rp/lmConf-with-plugins-configured.json")
+
+pytestmark = [
+    pytest.mark.debug,
+    pytest.mark.parametrize("fleet", [FLEET], indirect=True),
+    pytest.mark.parametrize(
+        "llng", [LLNG_CONFIG], indirect=True, ids=[LLNG_CONFIG.stem]
+    ),
+]
+
+
+@pytest.fixture(autouse=True)
+def scenario_setup(fresh_fleet: Fleet, llng: Llng) -> None:
+    """Ask for the fleet and the portal before the scenario.
+
+    Both are parametrized, and pytest binds a parametrized fixture to a
+    test only when the test asks for it while it is collected: a step
+    asking for them once the scenario is running comes too late. The
+    feature keeps them from one scenario to the next.
+
+    """
+
+
+@scenario(FEATURE, "The lab is configured")
+def test_debug_lab() -> None:
+    pass
