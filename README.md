@@ -258,7 +258,14 @@ Use `-F ./examples/ssh_config` when testing with users `dwho`,
 
 Make sure the "known hosts" file is properly populated so user can
 connect through SSH to the `maintainer` account without password on any
-host in the generated fleet.
+host in the generated fleet. The machines' keys are generated at their
+first boot, so they change with each creation (see [Machines](#machines)):
+
+```bash
+printf '%s\n' 2 66 67 | xargs -i \
+     ssh-keygen -f ~/.ssh/known_hosts -R 192.168.122.{}
+ssh-keyscan 192.168.122.2 192.168.122.66 192.168.122.67 >> ~/.ssh/known_hosts
+```
 
 Update the value of the `public_key_file` key in
 [examples/ob-builder-local](./examples/ob-builder-local.yml) to the key used in the configuration file.
