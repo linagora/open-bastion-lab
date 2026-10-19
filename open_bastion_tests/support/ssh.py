@@ -5,6 +5,7 @@ from pathlib import Path
 from typing import Protocol
 
 import logging
+import re
 import subprocess
 
 from open_bastion_tests.support import command
@@ -14,6 +15,11 @@ LOGGER = logging.getLogger(__name__)
 CONNECT_TIMEOUT = 10
 AUTHENTICATION_REFUSED = "Permission denied"
 CONNECTION_CLOSED = "Connection closed by"
+
+# The bastion records sessions with a forced command that exits 0 whatever
+# the session did, so the status of ob-ssh is asked for in the output.
+HOP_STATUS = "__ob_ssh_status__"
+HOP_STATUS_PATTERN = re.compile(rf"{HOP_STATUS}=(\d+)")
 
 
 class Connection(Protocol):
@@ -74,6 +80,7 @@ class HopResult:
     bastion: str
     backend: str
     reached_bastion: bool
+    status: int | None
     returncode: int
     stdout: str
     stderr: str
@@ -81,7 +88,8 @@ class HopResult:
 
     @property
     def succeeded(self) -> bool:
-        return self.returncode == 0
+        """True when ob-ssh reported success."""
+        return self.status == 0
 
     @property
     def denied(self) -> bool:
@@ -97,10 +105,11 @@ class HopResult:
 
     def describe(self) -> str:
         bastion = "reached" if self.reached_bastion else "not reached"
+        status = "no status" if self.status is None else f"ob-ssh exit {self.status}"
         return (
-            f"ob-ssh {self.backend} from {self.bastion} as {self.user} returned "
-            f"{self.returncode}, bastion {bastion}\n"
-            f"{self.stderr.strip()}\nsee {self.log}"
+            f"ob-ssh {self.backend} from {self.bastion} as {self.user} "
+            f"({status}), bastion {bastion}, ssh exit {self.returncode}\n"
+            f"{self.stdout.strip()}\n{self.stderr.strip()}\nsee {self.log}"
         )
 
 
@@ -119,9 +128,13 @@ class User:
     def certificate(self) -> Path:
         return self.key.with_name(f"{self.key.name}-cert.pub")
 
-    def generate_key(self) -> None:
-        """Create the key pair of the user, without any passphrase."""
+    def ensure_key(self) -> None:
+        """Create the key pair of the user if it doesn't exists.
+
+        The private key is created without any passphrase."""
         self.key.parent.mkdir(parents=True, exist_ok=True)
+        if self.key.exists():
+            return
         result = command.run(
             [
                 command.which("ssh-keygen"),
@@ -136,7 +149,10 @@ class User:
             ]
         )
         if result.returncode != 0:
-            raise RuntimeError(f"Failed to generate the key of {self.name}")
+            raise RuntimeError(
+                f"Failed to generate the key of {self.name}:\n"
+                f"{result.stdout}\n{result.stderr}"
+            )
 
     def public_key(self) -> str:
         return self.key.with_suffix(".pub").read_text().strip()
@@ -152,7 +168,10 @@ class User:
             [command.which("ssh-keygen"), "-lf", str(self.key.with_suffix(".pub"))]
         )
         if result.returncode != 0:
-            raise RuntimeError(f"Failed to read the fingerprint of {self.key}")
+            raise RuntimeError(
+                f"Failed to read the fingerprint of {self.key}\n"
+                f"{result.stdout}\n{result.stderr}"
+            )
         return result.stdout.split()[1]
 
     def save_certificate(self, certificate: str) -> None:
@@ -186,19 +205,27 @@ class User:
         """
         session = self.connect(bastion, ssh_config)
         log = self.home / f"hop-{bastion}-{backend}.log"
-        result = self._run(bastion, ssh_config, f"ob-ssh {backend} -- true", log)
+        result = self._run(
+            bastion,
+            ssh_config,
+            f"ob-ssh {backend} 'true; echo \"{HOP_STATUS}=$?\"'",
+            log,
+        )
+        match = HOP_STATUS_PATTERN.search(result.stdout)
+        status = int(match.group(1)) if match else None
         LOGGER.debug(
             "ob-ssh %s from %s as %s returned %s",
             backend,
             bastion,
             self.name,
-            result.returncode,
+            status,
         )
         return HopResult(
             user=self.name,
             bastion=bastion,
             backend=backend,
             reached_bastion=session.succeeded,
+            status=status,
             returncode=result.returncode,
             stdout=result.stdout,
             stderr=result.stderr,

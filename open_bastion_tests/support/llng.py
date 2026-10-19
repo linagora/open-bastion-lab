@@ -29,6 +29,7 @@ CONTAINER_CONF_DIR = "/var/lib/lemonldap-ng/conf"
 CONTAINER_SSH_DIR = "/var/lib/lemonldap-ng/ssh"
 
 JWKS_TRIES = 30
+PORTAL_TRIES = 60
 LOGIN_RETRY_DELAY = 5.0
 LOG_TAIL = 2000
 
@@ -83,6 +84,7 @@ class Llng:
     compose_file: Path
     portal_url: str = PORTAL_URL
     config_file: Path | None = None
+    config_number: int | None = None
     sessions: dict[str, Session | None] = field(default_factory=dict)
 
     def session(self, user: str) -> Session | None:
@@ -122,6 +124,24 @@ class Llng:
             raise LlngError("No configuration was imported")
         return self.config_file.stem
 
+    def ensure_configuration(self) -> None:
+        """Import the configuration of the feature again when it drifted.
+
+        A scenario may change the last configuration of the portal, and a
+        feature does not decide the order its scenarios run in: importing
+        the file again gives the next scenario the portal the feature
+        starts from, whatever ran before it.
+
+        """
+        if self.config_file is None:
+            raise LlngError("No configuration was imported")
+        if self.latest_config_number() == self.config_number:
+            return
+        LOGGER.info(
+            "The portal runs another configuration, restoring %s", self.config_file
+        )
+        self.restore(self.config_file)
+
     def running(self) -> list[str]:
         """Identifiers of the containers of the compose project."""
         result = self._compose("ps", "-q")
@@ -136,6 +156,19 @@ class Llng:
 
     def down(self) -> None:
         self._compose("down", "-v")
+
+    def reload(self) -> None:
+        """Have every worker serve the configuration last imported.
+
+        Each worker polls the configuration cache on a timer of its own, and
+        they reload one after another: a change can take a minute to reach
+        them all, which is longer than a scenario waits before asking the
+        fleet to connect. Starting the portal again has them all load the
+        current configuration.
+
+        """
+        self._compose("restart", CONTAINER)
+        self._wait_for_portal()
 
     def save_logs(self, path: Path) -> None:
         """Write what the portal logged where a failing test can be read."""
@@ -164,6 +197,8 @@ class Llng:
         )
         self._exec("lemonldap-ng-cli", "update-cache")
         self.config_file = config_file
+        self.config_number = config["cfgNum"]
+        self.reload()
         self._wait_for_jwks()
 
     def _wait_for_jwks(self) -> None:
@@ -185,6 +220,18 @@ class Llng:
                     return
             time.sleep(1)
         raise LlngError(f"{url} never served a complete JWKS")
+
+    def _wait_for_portal(self) -> None:
+        """Wait for the portal to answer again after a restart."""
+        for _ in range(PORTAL_TRIES):
+            try:
+                with urllib.request.urlopen(self.portal_url, timeout=5) as response:
+                    if response.status == 200:
+                        return
+            except urllib.error.URLError as e:
+                LOGGER.debug("%s is not ready: %s", self.portal_url, e)
+            time.sleep(1)
+        raise LlngError(f"{self.portal_url} never answered after a restart")
 
     def login(self, user: str) -> Session | None:
         """Open a session on the portal, or return None when the user has none.
@@ -281,6 +328,18 @@ class Llng:
             if cookie.name == "lemonldap":
                 return f"{cookie.name}={cookie.value}"
         return None
+
+    def latest_config_number(self) -> int:
+        """Number of the last configuration the portal has."""
+        result = self._exec("lemonldap-ng-cli", "-json", "info")
+        start = result.stdout.find("{")
+        if start < 0:
+            raise LlngError(f"No configuration number in {result.stdout!r}")
+        try:
+            answer = json.loads(result.stdout[start:])
+        except json.JSONDecodeError as e:
+            raise LlngError(f"Unreadable configuration info: {result.stdout!r}") from e
+        return int(answer["num"])
 
     def _next_config_number(self) -> int:
         result = self._exec("ls", CONTAINER_CONF_DIR)

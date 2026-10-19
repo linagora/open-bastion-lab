@@ -28,12 +28,14 @@ def fleet_is_ready(name: str, fresh_fleet: Fleet) -> None:
         )
 
 
-@given(parsers.re(r'the portal loaded the "(?P<name>[^"]+)" configuration'))
-def portal_loaded_configuration(name: str, llng: Llng) -> None:
-    """The portal runs the named configuration, imported by the fixture.
+@given(parsers.re(r'the LLNG configuration is "(?P<name>[^"]+)"'))
+def llng_configuration_is(name: str, llng: Llng) -> None:
+    """The portal runs the configuration the feature names, whatever ran before.
 
-    Same meeting point as for the fleet: the feature names the
-    configuration, the module of the feature gives it to the fixture.
+    The module of the feature gives the fixture the file, the feature names
+    it, and this is where the two meet. A scenario that changes the
+    configuration does not depend on the order it runs in: the file is
+    imported again when an earlier scenario changed it.
 
     """
     if llng.configuration != name:
@@ -41,6 +43,7 @@ def portal_loaded_configuration(name: str, llng: Llng) -> None:
             f"The feature names the configuration {name}, but the portal runs "
             f"{llng.configuration}"
         )
+    llng.ensure_configuration()
 
 
 @given(
@@ -75,7 +78,10 @@ def administrator_plays_playbook(deployed_fleet: Fleet) -> None:
 
 
 @given(
-    parsers.parse("user {name} has signed its SSH public key"),
+    # The name may be quoted in the feature: a parse expression would keep
+    # the quotes, and the portal would be asked about a user called
+    # '"rtyler"', which it does not know.
+    parsers.re(r'user "?(?P<name>[\w.-]+)"? has signed its SSH public key'),
     target_fixture="user",
 )
 def user_signs_its_public_key(
@@ -93,7 +99,7 @@ def user_signs_its_public_key(
 
     """
     user = user_factory(name)
-    user.generate_key()
+    user.ensure_key()
 
     session = portal_sessions(name)
     if session is None:
@@ -133,18 +139,41 @@ def user_copies_its_public_key(
 def administrator_sets_pam_access_ssh_rule(
     datatable: list[list[str]],
     llng: Llng,
-    fresh_fleet: Fleet,
 ) -> None:
     """Give the portal the SSH rules of the table, one row per server group.
 
     A row replaces the rule of its group, the rules of the groups the table
-    does not name are left as they are. The machines keep the answers of the
-    portal for a minute, so their cache is dropped as well: it is what makes
-    the change immediate instead of waiting for the next query.
+    does not name are left as they are. Neither the workers of the portal
+    nor the machines know the change yet: a scenario that expects it to be
+    immediate says so with the steps that follow.
 
     """
     rules = {group: rule for group, rule in datatable}
     llng.set_pam_ssh_rules(rules)
+
+
+@given("the portal workers reloaded the configuration")
+def portal_workers_reload_configuration(llng: Llng) -> None:
+    """Make every worker serve the rule the scenario just set.
+
+    A worker reads the configuration cache on a timer of its own, so a
+    change can take a minute to reach all of them: the portal is restarted,
+    which has them all load the current configuration at once.
+
+    """
+    llng.reload()
+
+
+@given("the administrator drops the authorization cache of the fleet")
+def administrator_drops_authorization_cache(fresh_fleet: Fleet) -> None:
+    """Make the machines ask the portal again.
+
+    They cache the authorization answers for a minute, so without this the
+    rule a scenario just set may not be known when the next connection
+    asks. Dropping the cache is a scenario step: what the machines know
+    and when they learn it is part of what the scenarios are about.
+
+    """
     fresh_fleet.forget_authorizations()
 
 

@@ -49,6 +49,11 @@ def test_local_account() -> None:
     pass
 
 
+@scenario(FEATURE, "Users not known to the portal can't access the backend")
+def test_local_account_on_backend() -> None:
+    pass
+
+
 @scenario(FEATURE, "A user whose access to the backends is removed can't hop")
 def test_backend_access_removed() -> None:
     pass

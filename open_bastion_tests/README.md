@@ -18,7 +18,6 @@ uv sync
 source .venv/bin/activate
 pytest
 ```
-
 The tests take the lab over, so the environment has to be free:
 
 * the fleet must not exist, free it with `ob-lab delete`;
@@ -74,6 +73,10 @@ directory is **removed when the run passes and kept when it fails**:
       ssh/.ssh/id_dwho               key pair, and its certificate next to it
       ssh/connect-bastion-1.log
 ```
+
+A failing run leaves the fleet and the portal running, so the state
+the failure came from can be inspected. A passing run frees the lab
+itself.
 
 ## Writing a scenario
 

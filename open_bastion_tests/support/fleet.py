@@ -47,8 +47,15 @@ PASSWORD_SSH_OPTIONS = [
     "NumberOfPasswordPrompts=1",
 ]
 
-# Options of the ssh commands the tests run against the maintainer account
+# Options of the ssh commands the tests run against the maintainer account.
+# The host configuration and the agent of whoever runs the tests are left
+# out: the machines only accept the key of the tests, and the server
+# disconnects once too many identities have been refused.
 SSH_OPTIONS = [
+    "-F",
+    "/dev/null",
+    "-o",
+    "IdentitiesOnly=yes",
     "-o",
     "StrictHostKeyChecking=no",
     "-o",

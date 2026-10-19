@@ -9,8 +9,9 @@ Feature: Ansible playbook for maximum security
   # still log in with the trivial password the fleet gives its accounts.
   Background:
     Given the fleet "two-backends" is ready
-    And the portal loaded the "lmConf-with-plugins-configured" configuration
+    And the LLNG configuration is "lmConf-with-plugins-configured"
     And user "pshark" has copied its SSH public key to "bastion-1"
+    And user "pshark" has copied its SSH public key to "backend-2"
     And an administrator runs ob-builder to generate an ansible playbook with the "ob-builder-max-security" configuration
     And the administrator plays the generated playbook against the fleet
 
@@ -43,16 +44,24 @@ Feature: Ansible playbook for maximum security
     When user "pshark" tries to connect to "bastion-1" through SSH
     Then the result is fails
 
+  Scenario: Users not known to the portal can't access the backend
+    When user "pshark" tries to connect to "backend-2" through SSH
+    Then the result is fails
+
   Scenario: A user whose access to the backends is removed can't hop
     Given user "msmith" has signed its SSH public key
     And the administrator set pam-access SSH rule to:
       | backend | $uid eq "dwho" or $uid eq "rtyler" |
+    And the portal workers reloaded the configuration
+    And the administrator drops the authorization cache of the fleet
     When user "msmith" hops from "bastion-1" to "backend-2" through SSH
     Then the result is fails
 
   Scenario: A user whose access is removed can't reach the bastion
-    Given user "msmith" has signed its SSH public key
+    Given user "rtyler" has signed its SSH public key
     And the administrator set pam-access SSH rule to:
-      | bastion | $uid eq "dwho" or $uid eq "rtyler" |
-    When user "msmith" tries to connect to "bastion-1" through SSH
+      | bastion | $uid eq "dwho" or $uid eq "msmith" |
+    And the portal workers reloaded the configuration
+    And the administrator drops the authorization cache of the fleet
+    When user "rtyler" tries to connect to "bastion-1" through SSH
     Then the result is fails

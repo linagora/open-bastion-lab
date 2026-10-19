@@ -9,7 +9,9 @@ machines, signing a key and opening a session, is cheap and does not decide
 what the next scenario sees.
 
 What a failing scenario produced is left in a working directory whose path is
-printed in the header of the run, and which is kept when the run fails.
+printed in the header of the run, and which is kept when the run fails. The
+fleet and the portal are kept as well, and the end of the run tells how to
+free them: the state a failure came from is what one wants to look at.
 
 """
 
@@ -33,6 +35,7 @@ MAINTAINER_KEY_NAME = "id_ob_tests_maintainer"
 LOGGER = logging.getLogger(__name__)
 
 WORK_DIR_KEY = pytest.StashKey[Path]()
+KEPT_LAB_KEY = pytest.StashKey[list[str]]()
 
 
 def _named(request: pytest.FixtureRequest, fixture: str, attribute: str) -> Path | str:
@@ -51,6 +54,12 @@ def _slug(name: str) -> str:
     return re.sub(r"[^\w.]+", "-", name).strip("-")
 
 
+def _keep_lab(request: pytest.FixtureRequest, cleanup: str) -> None:
+    """Leave what the run created in place, and record how to free it."""
+    LOGGER.info("Leaving the lab up: free it with `%s`", cleanup)
+    request.config.stash.setdefault(KEPT_LAB_KEY, []).append(cleanup)
+
+
 def pytest_configure(config: pytest.Config) -> None:
     config.stash[WORK_DIR_KEY] = Path(tempfile.mkdtemp(prefix="ob-lab-tests-"))
 
@@ -65,6 +74,11 @@ def pytest_sessionfinish(session: pytest.Session, exitstatus: int) -> None:
         shutil.rmtree(work_dir, ignore_errors=True)
     else:
         print(f"\nArtifacts of the run kept in {work_dir}")
+        kept = session.config.stash.get(KEPT_LAB_KEY, [])
+        if kept:
+            print("The lab was left running; free it with:")
+            for cleanup in kept:
+                print(f"  {cleanup}")
 
 
 @pytest.fixture(scope="session")
@@ -122,7 +136,7 @@ def fleet(request: pytest.FixtureRequest, maintainer_key: Path) -> Iterator[Flee
 
     The module that asks for it names the fleet, by indirect
     parametrization, and the Background of its feature tells the same
-    name.
+    name. A run that failed leaves the machines up for inspection.
 
     """
     name = _named(request, "fleet", "FLEET")
@@ -139,7 +153,10 @@ def fleet(request: pytest.FixtureRequest, maintainer_key: Path) -> Iterator[Flee
     fleet.wait_for_cloud_init()
     fleet.snapshot()
     yield fleet
-    fleet.delete()
+    if request.session.testsfailed:
+        _keep_lab(request, f"ob-lab -f {fleet.name} delete")
+    else:
+        fleet.delete()
 
 
 @pytest.fixture(scope="module")
@@ -150,8 +167,12 @@ def fresh_fleet(fleet: Fleet) -> Fleet:
 
 
 @pytest.fixture(scope="session")
-def llng_runtime(work_dir: Path) -> Iterator[Llng]:
-    """The portal, running in its own compose project for the whole session."""
+def llng_runtime(request: pytest.FixtureRequest, work_dir: Path) -> Iterator[Llng]:
+    """The portal, running in its own compose project for the whole session.
+
+    A run that failed leaves it up for inspection.
+
+    """
     llng = Llng(data("llng/docker-compose.yml"))
     running = llng.running()
     if running:
@@ -165,7 +186,10 @@ def llng_runtime(work_dir: Path) -> Iterator[Llng]:
     llng.up()
     yield llng
     llng.save_logs(work_dir / "llng.log")
-    llng.down()
+    if request.session.testsfailed:
+        _keep_lab(request, f"docker compose -f {llng.compose_file} down -v")
+    else:
+        llng.down()
 
 
 @pytest.fixture(scope="module")
@@ -254,7 +278,7 @@ def copied_public_keys(
         key = (account, host)
         if key not in copied:
             user = User(name=account, home=local_user_home)
-            user.generate_key()
+            user.ensure_key()
             fresh_fleet.copy_public_key(fresh_fleet.machine(host), account, user.key)
             copied[key] = user
         return copied[key]
