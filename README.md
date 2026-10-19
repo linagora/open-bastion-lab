@@ -136,6 +136,13 @@ failures). A failing run leaves the fleet and the portal running for
 inspection, and prints at the end the commands that free them; a passing run
 frees them itself.
 
+To start a fully configured fleet:
+
+```bash
+pytest --log-cli-level="INFO" -m debug
+```
+Press Ctrl-c to stop the fleet and free all resources.
+
 ## Manually testing Open Bastion
 
 What the tests perform automatically by hand.
