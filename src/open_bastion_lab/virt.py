@@ -389,9 +389,9 @@ class LibvirtProxy(HypervisorProxy):
             LOGGER.exception("Failed to snapshot domain %s", machine.name)
             return False
 
-        if not was_active:
-            return True
-        return self._redefine(domain) and await self.start(machine)
+        return self._redefine(domain) and (
+            await self.start(machine) if was_active else True
+        )
 
     @override
     async def restore(self, machine: Machine, name: str) -> bool:
