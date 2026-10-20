@@ -580,7 +580,7 @@ class LibvirtProxy(HypervisorProxy):
           </os>
           <sysinfo type='smbios'>
             <system>
-              <entry name='serial'>ds=nocloud-net;s={imds_url}/{name}/</entry>
+              <entry name='serial'>ds=nocloud;s={imds_url}/{name}/</entry>
             </system>
           </sysinfo>
           <features>
