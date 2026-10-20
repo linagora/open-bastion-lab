@@ -37,7 +37,7 @@ follow_untyped_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["open_bastion_tests"]
-addopts = "-p open_bastion_tests.steps.ssh_access -p open_bastion_tests.steps.debug -m 'not debug'"
+addopts = "-p open_bastion_tests.steps.ssh_access -p open_bastion_tests.steps.deployment -p open_bastion_tests.steps.debug -m 'not debug'"
 markers = [
     "debug: configure the lab for debugging and wait on purpose",
 ]

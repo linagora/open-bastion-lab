@@ -78,6 +78,32 @@ A failing run leaves the fleet and the portal running, so the state
 the failure came from can be inspected. A passing run frees the lab
 itself.
 
+## Reading what the deployment left
+
+A configured fleet hands elevation to the portal: once `ob-bastion-setup` has
+run, no local account can `sudo` any more, the `maintainer` one included.
+A check that has to read a root-owned file — the sshd drop-in serving the
+service-account keys, the sudo stack of the bastion, the bastions a backend
+accepts — therefore cannot go through SSH. It asks the QEMU guest agent of
+the machine instead: the agent answers on its virtio channel, before PAM and
+sshd, and runs as root.
+
+`open_bastion_tests/support/guest_agent.py` wraps it (`run`, `shell`,
+`read_text`, `exists`), and `Fleet.run_as_root` / `Fleet.read_as_root` do the
+same through a machine of the fleet. The scenarios using them are at the end
+of `features/ansible_playbook_maximum_security.feature`.
+
+The agent takes a few seconds after a guest boots to connect; the fleet kept
+from a failed run can be read the same way:
+
+```bash
+python -c "
+from open_bastion_tests.support import guest_agent as ga
+print(ga.read_text('bastion-1', '/etc/pam.d/sudo'))"
+```
+
+The base image has to keep `qemu-guest-agent` enabled for this to work.
+
 ## Writing a scenario
 
 🚧

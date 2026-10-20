@@ -11,7 +11,8 @@ from open_bastion_lab.config import Config, load_config
 from open_bastion_lab.machine import Machine, MachineState
 from open_bastion_lab.runner import DEFAULT_SNAPSHOT, hypervisor_proxy, run
 
-from open_bastion_tests.support import command, public_key
+from open_bastion_tests.support import command, guest_agent, public_key
+from open_bastion_tests.support.guest_agent import AgentResult
 
 LOGGER = logging.getLogger(__name__)
 
@@ -229,6 +230,20 @@ class Fleet:
             *SSH_OPTIONS,
             f"maintainer@{machine.ip}",
         ]
+
+    def run_as_root(self, machine: Machine, script: str) -> AgentResult:
+        """Run a shell command as root in a guest, through its agent.
+
+        A configured fleet takes sudo away from every local account, so a
+        check that reads a root-owned file has no SSH path left: see
+        :mod:`open_bastion_tests.support.guest_agent`.
+
+        """
+        return guest_agent.shell(machine.name, script)
+
+    def read_as_root(self, machine: Machine, path: str) -> str:
+        """What a root-owned file of a guest holds."""
+        return guest_agent.read_text(machine.name, path)
 
     def delete(self) -> None:
         self._run("delete")

@@ -89,3 +89,15 @@ Feature: Ansible playbook for maximum security
     And the administrator drops the authorization cache of the fleet
     When user "rtyler" runs sudo on "backend-2" from "bastion-1" through SSH
     Then the result is fails
+
+  # What the deployment left behind, read with the guest agent of the
+  # machines: a configured fleet has no local account left that can
+  # elevate, so these cannot be checked over SSH.
+  Scenario: The bastion serves the service-account keys
+    Then the bastion "bastion-1" serves the service-account keys
+
+  Scenario: Sudo on the bastion goes through the portal
+    Then the sudo stack of "bastion-1" asks the portal
+
+  Scenario: The backends only accept the bastion of the fleet
+    Then the backends accept only the bastion "bastion-1"

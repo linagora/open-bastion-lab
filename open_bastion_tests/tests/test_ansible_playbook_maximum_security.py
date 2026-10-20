@@ -77,3 +77,18 @@ def test_sudo_on_bastion() -> None:
 @scenario(FEATURE, "A user whose sudo access is removed can't sudo")
 def test_sudo_removed() -> None:
     pass
+
+
+@scenario(FEATURE, "The bastion serves the service-account keys")
+def test_service_account_keys_are_served() -> None:
+    pass
+
+
+@scenario(FEATURE, "Sudo on the bastion goes through the portal")
+def test_sudo_goes_through_the_portal() -> None:
+    pass
+
+
+@scenario(FEATURE, "The backends only accept the bastion of the fleet")
+def test_backends_accept_only_the_bastion() -> None:
+    pass
