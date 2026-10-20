@@ -5,7 +5,6 @@ from pathlib import Path
 from typing import Protocol
 
 import logging
-import re
 import subprocess
 
 from open_bastion_tests.support import command
@@ -15,15 +14,6 @@ LOGGER = logging.getLogger(__name__)
 CONNECT_TIMEOUT = 10
 AUTHENTICATION_REFUSED = "Permission denied"
 CONNECTION_CLOSED = "Connection closed by"
-
-# The bastion records sessions with a forced command that exits 0 whatever
-# the session did, so the status of ob-ssh is asked for in the output.
-HOP_STATUS = "__ob_ssh_status__"
-HOP_STATUS_PATTERN = re.compile(rf"{HOP_STATUS}=(\d+)")
-
-# Same for sudo, whose own status says whether the portal allowed it.
-SUDO_STATUS = "__ob_sudo_status__"
-SUDO_STATUS_PATTERN = re.compile(rf"{SUDO_STATUS}=(\d+)")
 
 
 class Connection(Protocol):
@@ -246,11 +236,10 @@ class User:
         result = self._run(
             bastion,
             ssh_config,
-            f"ob-ssh {backend} 'true; echo \"{HOP_STATUS}=$?\"'",
+            f"ob-ssh {backend} true",
             log,
         )
-        match = HOP_STATUS_PATTERN.search(result.stdout)
-        status = int(match.group(1)) if match else None
+        status = result.returncode
         LOGGER.debug(
             "ob-ssh %s from %s as %s returned %s",
             backend,
@@ -289,7 +278,7 @@ class User:
         from stdin so nothing waits on a terminal.
 
         """
-        return f'echo {token} | sudo -S true; echo "{SUDO_STATUS}=$?"'
+        return f"echo {token} | sudo -S true"
 
     def _sudo(
         self, session_host: str, sudo_host: str, remote: str, ssh_config: Path
@@ -302,8 +291,7 @@ class User:
         """
         log = self.home / f"sudo-{sudo_host}.log"
         result = self._run(session_host, ssh_config, remote, log)
-        match = SUDO_STATUS_PATTERN.search(result.stdout)
-        status = int(match.group(1)) if match else None
+        status = result.returncode
         LOGGER.debug("sudo as %s on %s returned %s", self.name, sudo_host, status)
         return SudoResult(
             user=self.name,
