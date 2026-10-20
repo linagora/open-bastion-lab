@@ -97,6 +97,10 @@ dpkg-scanpackages -m . /dev/null > Packages && gzip -kf Packages
 python3 -m http.server 8000 --directory /srv/ob-lab
 ```
 
+See [scripts/refresh-lab-packages.sh](./scripts/refresh-lab-packages.sh) for a script that automatize this
+under the hypothesis that the `open-bastion` Git repository is a sibling
+of the current repository.
+
 💡 In case port 8000 is already used, make sure to update the port in
 subsequent commands and configuration files, eg
 [examples/inventory](./examples/inventory.yaml).
