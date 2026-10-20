@@ -208,28 +208,18 @@ class Fleet:
         cache is gone. What is dropped is a cache: the enrolment of the
         machines lives elsewhere.
 
+        The cache is root's, and a configured fleet hands elevation to the
+        portal: no local account can sudo any more, so the guest agent is
+        what is left to drop it. See
+        :mod:`open_bastion_tests.support.guest_agent`.
+
         """
         for machine in self.machines():
-            result = command.run(
-                [
-                    *self._ssh_args(machine),
-                    f"sudo rm -rf {AUTHORIZATION_CACHE}",
-                ]
-            )
-            if result.returncode != 0:
+            result = self.run_as_root(machine, f"rm -rf {AUTHORIZATION_CACHE}")
+            if not result.succeeded:
                 raise RuntimeError(
-                    f"Failed to clear the cache of {machine.name}: {result.stderr}"
+                    f"Failed to clear the cache of {machine.name}: {result.describe()}"
                 )
-
-    def _ssh_args(self, machine: Machine) -> list[str]:
-        """Arguments of a command run on a machine as the maintainer."""
-        return [
-            command.which("ssh"),
-            "-i",
-            str(self.key),
-            *SSH_OPTIONS,
-            f"maintainer@{machine.ip}",
-        ]
 
     def run_as_root(self, machine: Machine, script: str) -> AgentResult:
         """Run a shell command as root in a guest, through its agent.

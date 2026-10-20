@@ -26,12 +26,16 @@ def fleet_is_ready(name: str, fresh_fleet: Fleet) -> None:
     against; the module of the feature says the same, because pytest needs
     it before the scenario starts, and this step is where the two meet.
 
+    The SSH authorization cache is cleared on each machine of the
+    fleet.
+
     """
     if fresh_fleet.name != name:
         pytest.fail(
             f"The feature names the fleet {name}, but the tests run against "
             f"{fresh_fleet.name}"
         )
+    fresh_fleet.forget_authorizations()
 
 
 @given(parsers.re(r'the LLNG configuration is "(?P<name>[^"]+)"'))
