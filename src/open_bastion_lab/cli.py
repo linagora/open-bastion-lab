@@ -16,7 +16,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--fleet",
         type=str,
         default="",
-        help="fleet to deploy",
+        help="fleet to deploy, optional",
     )
     parser.add_argument(
         "-d",
@@ -29,7 +29,7 @@ def build_parser() -> argparse.ArgumentParser:
         "--snapshot",
         type=str,
         default=DEFAULT_SNAPSHOT,
-        help="snapshot to create or restore",
+        help=f"snapshot to create or restore (default: {DEFAULT_SNAPSHOT})",
     )
     parser.add_argument(
         "command",
