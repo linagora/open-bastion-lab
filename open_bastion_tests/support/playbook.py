@@ -19,10 +19,32 @@ KEY_PATTERN = re.compile(r"^(?P<indent>[ \t]*)public_key_file:.*$", re.MULTILINE
 INVENTORY_KEY_PATTERN = re.compile(
     r"^(?P<indent>[ \t]*)ansible_ssh_private_key_file:.*$", re.MULTILINE
 )
+APT_SOURCES_PATTERN = re.compile(
+    r"^(?P<indent>[ \t]*)ob_apt_sources_list_line:[ \t]*(?P<line>\S.*)$", re.MULTILINE
+)
+APT_URL_PATTERN = re.compile(r"https?://[^\s\"]+")
 
 PLAYBOOK = "site.yml"
 LOG = "ansible-playbook.log"
 BUILD_LOG = "ob-builder.log"
+
+
+def apt_repository_url() -> str:
+    """Base URL of the repository the fleet installs packages from.
+
+    Read from the inventory the tests hand to ansible-playbook, so a check
+    of that repository looks at the address the machines are given.
+
+    """
+    sources = APT_SOURCES_PATTERN.search(INVENTORY_FILE.read_text())
+    if sources is None:
+        raise RuntimeError(f"No ob_apt_sources_list_line in {INVENTORY_FILE}")
+    url = APT_URL_PATTERN.search(sources.group("line"))
+    if url is None:
+        raise RuntimeError(
+            f"No URL in {sources.group('line').strip()!r}, read from {INVENTORY_FILE}"
+        )
+    return url.group(0).rstrip("/")
 
 
 class Administrator:

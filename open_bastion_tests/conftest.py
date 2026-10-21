@@ -23,14 +23,20 @@ import pytest
 import re
 import shutil
 import tempfile
+import urllib.error
+import urllib.request
 
 from open_bastion_tests.support import command
 from open_bastion_tests.support.fleet import Fleet, data
 from open_bastion_tests.support.llng import ADMIN_USER, Llng, Session
-from open_bastion_tests.support.playbook import Administrator
+from open_bastion_tests.support.playbook import Administrator, apt_repository_url
 from open_bastion_tests.support.ssh import User
 
 MAINTAINER_KEY_NAME = "id_ob_tests_maintainer"
+
+PACKAGES_INDEX = "Packages"
+PACKAGES_PACKAGE = "Package: open-bastion"
+PACKAGES_TIMEOUT = 10.0
 
 LOGGER = logging.getLogger(__name__)
 
@@ -103,6 +109,48 @@ def scenario_dir(request: pytest.FixtureRequest, module_dir: Path) -> Path:
 
 
 @pytest.fixture(scope="session")
+def packages_server() -> None:
+    """The repository the fleet installs open-bastion from answers.
+
+    It is the lab's, not the tests': a session that starts without it
+    spends minutes creating the fleet and dies in the middle of the play,
+    with ansible reporting the output of a failing apt task. Asking for
+    the index at the address the machines are given fails in a second
+    instead, and says what is missing. See "Build dev packages and serve
+    locally" in README.md.
+
+    """
+    url = apt_repository_url()
+    index = f"{url}/{PACKAGES_INDEX}"
+    try:
+        with urllib.request.urlopen(index, timeout=PACKAGES_TIMEOUT) as response:
+            body = response.read().decode(errors="replace")
+    except urllib.error.HTTPError as error:
+        pytest.fail(
+            f"The server at {url} answered {error.code} for {index}: it "
+            f'serves no APT index. Regenerate it, see "Build dev packages '
+            f'and serve locally" in README.md',
+            pytrace=False,
+        )
+    except (urllib.error.URLError, OSError) as error:
+        pytest.fail(
+            f"No package server at {url} ({error}): the fleet installs "
+            f"open-bastion from it and the tests do not start it. See "
+            f'"Build dev packages and serve locally" in README.md',
+            pytrace=False,
+        )
+    if PACKAGES_PACKAGE not in body:
+        pytest.fail(
+            f"The server at {url} serves an index without "
+            f"{PACKAGES_PACKAGE!r}: the fleet would have nothing to install. "
+            f'Republish the packages, see "Build dev packages and serve '
+            f'locally" in README.md',
+            pytrace=False,
+        )
+    LOGGER.info("The package server of the lab answers at %s", url)
+
+
+@pytest.fixture(scope="session")
 def maintainer_key(work_dir: Path) -> Path:
     """The key pair the tests reach the maintainer account of the guests with.
 
@@ -131,12 +179,16 @@ def maintainer_key(work_dir: Path) -> Path:
 
 
 @pytest.fixture(scope="session")
-def fleet(request: pytest.FixtureRequest, maintainer_key: Path) -> Iterator[Fleet]:
+def fleet(
+    request: pytest.FixtureRequest, maintainer_key: Path, packages_server: None
+) -> Iterator[Fleet]:
     """The machines the scenarios run against, deleted at the end.
 
     The module that asks for it names the fleet, by indirect
     parametrization, and the Background of its feature tells the same
-    name. A run that failed leaves the machines up for inspection.
+    name. A run that failed leaves the machines up for inspection. The
+    package server is asked for first: it is what the deployment needs and
+    the only prerequisite that costs nothing to check.
 
     """
     name = _named(request, "fleet", "FLEET")
