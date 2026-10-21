@@ -149,19 +149,22 @@ def fleet(request: pytest.FixtureRequest, maintainer_key: Path) -> Iterator[Flee
             pytrace=False,
         )
 
-    fleet.start()
-    fleet.wait_for_cloud_init()
-    fleet.snapshot()
-    yield fleet
-    if request.session.testsfailed:
-        _keep_lab(request, f"ob-lab -f {fleet.name} delete")
-    else:
-        fleet.delete()
+    try:
+        fleet.start()
+        fleet.wait_for_cloud_init()
+        fleet.snapshot()
+        yield fleet
+    finally:
+        if request.session.testsfailed:
+            _keep_lab(request, f"ob-lab -f {fleet.name} delete")
+        else:
+            fleet.delete()
 
 
 @pytest.fixture(scope="module")
 def fresh_fleet(fleet: Fleet) -> Fleet:
-    """The fleet as it was when the session snapshotted it."""
+    """The fleet as it was when the session snapshotted it. All
+    machines started."""
     fleet.restore()
     return fleet
 

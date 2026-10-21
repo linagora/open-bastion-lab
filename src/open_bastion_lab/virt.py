@@ -395,7 +395,7 @@ class LibvirtProxy(HypervisorProxy):
 
     @override
     async def restore(self, machine: Machine, name: str) -> bool:
-        """Revert the machine to the given snapshot.
+        """Revert the machine to the given snapshot and start the machine.
 
         The overlay written since the snapshot is dropped and replaced by
         an empty one over the same backing store.
