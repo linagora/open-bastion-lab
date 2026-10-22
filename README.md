@@ -314,11 +314,22 @@ Then replay the playbook with the setup step enabled:
 ansible-playbook -i ../examples/inventory.yml site.yml  -e ob_auto_setup=true
 ```
 
+To auto-enroll, use the
+[examples/ob-builder-local-with-auto-enrolment.yml](examples/ob-builder-local-with-auto-enrolment.yml) configuration file,
+then retrieve a cookie for an admin and finally play the ansible
+playbook:
+
+```bash
+ob-builder --config ../examples/ob-builder-local-with-auto-enrolment.yml --output-ansible .
+COOKIE=$(llng --llng-url http://auth.example.com  --login dwho --password dwho llng_cookie)
+ansible-playbook -i ../examples/inventory.yaml site.yml -e "ob_llng_cookie=$COOKIE"
+```
+
 Once the play ends, users that own certificates from LLNG CA can
 connect:
 
 ```bash
-$ ssh -F examples/ssh_config dwho@bastion-1
+$ ssh -F ../examples/ssh_config dwho@bastion-1
 dwho@bastion-1:~$ ob-ssh backend-2
 Warning: Permanently added 'backend-2' (ED25519) to the list of known hosts.
 dwho@backend-2:~$
