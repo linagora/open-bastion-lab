@@ -95,6 +95,17 @@ class HopResult:
         return self.returncode == 0
 
     @property
+    def output(self) -> str:
+        """What the hop printed, whichever stream it printed it on.
+
+        The recorder of the bastion runs ob-ssh under a pty, which merges
+        the streams: the message of ssh saying why the hop failed arrives
+        on stdout as often as on stderr.
+
+        """
+        return self.stdout + self.stderr
+
+    @property
     def denied(self) -> bool:
         """True when the bastion opened a session and the hop was refused.
 
@@ -108,10 +119,10 @@ class HopResult:
         """
         if not self.reached_bastion or self.succeeded:
             return False
-        if any(marker in self.stderr for marker in UNREACHABLE):
+        if any(marker in self.output for marker in UNREACHABLE):
             return False
         return any(
-            marker in self.stderr
+            marker in self.output
             for marker in (
                 AUTHENTICATION_REFUSED,
                 CONNECTION_CLOSED,
