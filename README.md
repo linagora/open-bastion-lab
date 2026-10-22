@@ -103,7 +103,7 @@ of the current repository.
 
 💡 In case port 8000 is already used, make sure to update the port in
 subsequent commands and configuration files, eg
-[examples/inventory](./examples/inventory.yaml).
+[examples/inventory.yml](./examples/inventory.yml).
 
 ## Automatic functional tests
 
@@ -288,12 +288,12 @@ mkdir -p ansible; cd ansible
 ob-builder --config ../examples/ob-builder-local.yml --output-ansible .
 ```
 
-Adapt the [examples/inventory.yaml](./examples/inventory.yaml) file to the LLNG configuration (it
+Adapt the [examples/inventory.yml](./examples/inventory.yml) file to the LLNG configuration (it
 makes the assumption of two OIDC RPs `pam-bastion` and `pam-access`). Play
 the playbook to install `open-bastion` and its requirements:
 
 ```bash
-ansible-playbook -i ../examples/inventory.yaml site.yml
+ansible-playbook -i ../examples/inventory.yml site.yml
 ```
 
 Then follow the instructions given by each of the following commands
@@ -311,7 +311,7 @@ ssh -t maintainer@192.168.122.67 \
 Then replay the playbook with the setup step enabled:
 
 ```bash
-ansible-playbook -i ../examples/inventory.yaml site.yml  -e ob_auto_setup=true
+ansible-playbook -i ../examples/inventory.yml site.yml  -e ob_auto_setup=true
 ```
 
 Once the play ends, users that own certificates from LLNG CA can
