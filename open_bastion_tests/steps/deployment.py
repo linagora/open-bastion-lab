@@ -25,7 +25,7 @@ LOGGER = logging.getLogger(__name__)
 SERVICE_KEYS_DROP_IN = "/etc/ssh/sshd_config.d/09-open-bastion-service-keys.conf"
 SUDO_STACK = "/etc/pam.d/sudo"
 ALLOWED_BASTIONS = "/etc/open-bastion/allowed_bastions"
-BASTION_ID = "/usr/sbin/ob-bastion-id"
+BASTION_ID = "/usr/bin/ob-bastion-id"
 
 # sshd serves the keys of the service accounts only with both of them
 SERVICE_KEYS_PATTERNS = (
