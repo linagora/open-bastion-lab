@@ -5,6 +5,7 @@ from typing import overload, override, Any, Coroutine, Sequence
 import asyncio
 import logging
 import xml.etree.ElementTree as ET
+from xml.sax.saxutils import escape
 
 import libvirt
 
@@ -111,8 +112,8 @@ def _snapshot_xml(name: str, backing: Path) -> str:
     """
     return (
         "<domainsnapshot>"
-        f"<name>{name}</name>"
-        f"<description>backing={backing}</description>"
+        f"<name>{escape(name)}</name>"
+        f"<description>backing={escape(str(backing))}</description>"
         "</domainsnapshot>"
     )
 
@@ -120,11 +121,10 @@ def _snapshot_xml(name: str, backing: Path) -> str:
 def _snapshot_backing(xml: str) -> Path | None:
     """Backing file of a snapshot, as recorded by :func:`_snapshot_xml`."""
     root = ET.fromstring(xml)
-    description = root.findtext("description") or ""
-    for token in description.split():
-        if token.startswith("backing="):
-            return Path(token.removeprefix("backing="))
-    return None
+    description = (root.findtext("description") or "").strip()
+    if not description.startswith("backing="):
+        return None
+    return Path(description.removeprefix("backing="))
 
 
 def _without_backing_stores(xml: str) -> str:
