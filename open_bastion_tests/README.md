@@ -1,6 +1,6 @@
 # open-bastion-tests
 
-Functionnal tests of [open-bastion](https://github.com/linagora/open-bastion) against the infrastructure
+Functional tests of [open-bastion](https://github.com/linagora/open-bastion) against the infrastructure
 [open-bastion-lab](../README.md) answers to the question: does the deployment flow
 actually produce a working fleet?.
 
@@ -18,6 +18,20 @@ uv sync
 source .venv/bin/activate
 pytest
 ```
+
+On top of what the lab needs ([Pre-requisites](../README.md#pre-requisites)):
+
+* `ob-builder`, from the `open-bastion-builder` package, and
+  `ansible-playbook` in the `PATH`;
+* Docker, with the `yadd/lemonldap-ng-full:exp` image pulled: the portal runs
+  in its own compose project;
+* the `/etc/hosts` line the portal answers to, since `ob-builder` reads the SSO
+  metadata, the SSH CA key and the revocation list from it by name:
+
+  ```
+  192.168.122.1 auth.example.com manager.example.com reload.example.com test1.example.com test2.example.com
+  ```
+
 The tests take the lab over, so the environment has to be free:
 
 * the fleet must not exist, free it with `ob-lab delete`;
@@ -27,7 +41,7 @@ The tests take the lab over, so the environment has to be free:
 * port 80 of the host serves the LLNG container of the tests, so stop any
   other portal;
 * the package server of the lab
-  ([Build dev package and serve locally](../README.md#build-dev-package-and-serve-locally))
+  ([Build dev packages and serve locally](../README.md#build-dev-packages-and-serve-locally))
   must be up.
 
 They bring their own SSH key: `id_ob_tests_maintainer` is generated in their

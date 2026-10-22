@@ -5,7 +5,7 @@ Provide virtual infrastructure for functional testing of [open-bastion](https://
 Why not Docker? Because `open-bastion` relies heavily on systemd and we
 want to test in a representative environment the generated deployment
 artefacts, the real init, a fleet as a fleet (several machines,
-per-bastion server groups, `allowed_bastions`) and a portal whos e
+per-bastion server groups, `allowed_bastions`) and a portal whose
 policy changes.
 
 ## Roadmap
