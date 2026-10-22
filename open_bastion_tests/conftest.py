@@ -292,7 +292,6 @@ def portal_sessions(llng: Llng) -> Callable[[str], Session | None]:
 def portal_session(llng: Llng) -> Session:
     """The session the administrator approves enrolments with."""
     session = llng.session(ADMIN_USER)
-    assert session is not None
     if session is None:
         pytest.fail(f"{ADMIN_USER} cannot open a session on the portal")
     return session

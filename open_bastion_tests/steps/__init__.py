@@ -10,6 +10,6 @@ of the lab, which makes their steps visible to every feature.
 
 """
 
-from open_bastion_tests.steps import ssh_access
+from open_bastion_tests.steps import debug, ssh_access
 
-__all__ = ["ssh_access"]
+__all__ = ["debug", "ssh_access"]
