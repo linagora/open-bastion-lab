@@ -9,7 +9,3 @@ therefore loaded as plugins, named by ``addopts`` in the ``pyproject.toml``
 of the lab, which makes their steps visible to every feature.
 
 """
-
-from open_bastion_tests.steps import debug, ssh_access
-
-__all__ = ["debug", "ssh_access"]
