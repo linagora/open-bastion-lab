@@ -134,7 +134,7 @@ class SudoResult:
 
     user: str
     host: str
-    status: int | None
+    status: int
     stdout: str
     stderr: str
     log: Path
@@ -146,18 +146,12 @@ class SudoResult:
 
     @property
     def denied(self) -> bool:
-        """True when the machine ran sudo and refused it.
-
-        A machine the user cannot reach at all reports no status, and does
-        not count as a refusal.
-
-        """
-        return self.status is not None and self.status != 0
+        """True when the machine ran sudo and refused it."""
+        return self.status != 0
 
     def describe(self) -> str:
-        status = "no status" if self.status is None else f"sudo exit {self.status}"
         return (
-            f"sudo as {self.user} on {self.host} ({status})\n"
+            f"sudo as {self.user} on {self.host} (sudo exit {self.status})\n"
             f"{self.stdout.strip()}\n{self.stderr.strip()}\nsee {self.log}"
         )
 
@@ -304,8 +298,8 @@ class User:
     ) -> SudoResult:
         """Run sudo where the session leads, and read its status.
 
-        The status is asked for in the output: the recorder of the bastion
-        reports its own status, not the one of the command.
+        The session recorder of the bastion hands the exit status of the
+        command back to ssh, so sudo's own status is the one read here.
 
         """
         log = self.home / f"sudo-{sudo_host}.log"
