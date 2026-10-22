@@ -342,8 +342,11 @@ class LibvirtProxy(HypervisorProxy):
             | libvirt.VIR_DOMAIN_UNDEFINE_SNAPSHOTS_METADATA
         )
         # The backing stores of the snapshots have to be read before the
-        # metadata is dropped, a restored domain no longer records them.
-        paths = [*_disk_chain(xml_desc), *self._snapshot_storages(domain)]
+        # metadata is dropped, a restored domain no longer records them. The
+        # last one ends the chain and is therefore listed twice.
+        paths = list(
+            dict.fromkeys([*_disk_chain(xml_desc), *self._snapshot_storages(domain)])
+        )
         domain.undefineFlags(flags)
         # The base disk is shared with the other machines and left alone.
         paths = [p for p in paths if p.name != BASE_DISK_FILENAME]
