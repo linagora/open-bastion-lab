@@ -14,6 +14,16 @@ LOGGER = logging.getLogger(__name__)
 CONNECT_TIMEOUT = 10
 AUTHENTICATION_REFUSED = "Permission denied"
 CONNECTION_CLOSED = "Connection closed by"
+CERTIFICATE_REFUSED = "refused to issue a certificate"
+
+# Failures of the hop itself, which decide nothing about the fleet.
+UNREACHABLE = (
+    "Connection refused",
+    "No route to host",
+    "Connection timed out",
+    "Could not resolve hostname",
+    "command not found",
+)
 
 
 class Connection(Protocol):
@@ -74,7 +84,6 @@ class HopResult:
     bastion: str
     backend: str
     reached_bastion: bool
-    status: int | None
     returncode: int
     stdout: str
     stderr: str
@@ -83,26 +92,38 @@ class HopResult:
     @property
     def succeeded(self) -> bool:
         """True when ob-ssh reported success."""
-        return self.status == 0
+        return self.returncode == 0
 
     @property
     def denied(self) -> bool:
-        """True when the bastion opened a session and the hop did not happen.
+        """True when the bastion opened a session and the hop was refused.
 
-        A user the fleet refuses on the backend still gets its session on
-        the bastion, and ob-ssh fails there. A user it refuses on the
-        bastion never gets that far, which a backend scenario does not ask
-        about: the hop is not what failed.
+        ob-ssh fails for three different reasons: the portal refuses to
+        issue a certificate, the backend refuses the certificate it was
+        given, or the hop never happened because the backend is down, its
+        name does not resolve, or ob-ssh is not installed. Only the first
+        two are the answer of the fleet: a scenario asking about a refusal
+        would otherwise pass on a broken fleet.
 
         """
-        return self.reached_bastion and not self.succeeded
+        if not self.reached_bastion or self.succeeded:
+            return False
+        if any(marker in self.stderr for marker in UNREACHABLE):
+            return False
+        return any(
+            marker in self.stderr
+            for marker in (
+                AUTHENTICATION_REFUSED,
+                CONNECTION_CLOSED,
+                CERTIFICATE_REFUSED,
+            )
+        )
 
     def describe(self) -> str:
         bastion = "reached" if self.reached_bastion else "not reached"
-        status = "no status" if self.status is None else f"ob-ssh exit {self.status}"
         return (
             f"ob-ssh {self.backend} from {self.bastion} as {self.user} "
-            f"({status}), bastion {bastion}, ssh exit {self.returncode}\n"
+            f"(ssh exit {self.returncode}), bastion {bastion}\n"
             f"{self.stdout.strip()}\n{self.stderr.strip()}\nsee {self.log}"
         )
 
@@ -239,20 +260,18 @@ class User:
             f"ob-ssh {backend} true",
             log,
         )
-        status = result.returncode
         LOGGER.debug(
             "ob-ssh %s from %s as %s returned %s",
             backend,
             bastion,
             self.name,
-            status,
+            result.returncode,
         )
         return HopResult(
             user=self.name,
             bastion=bastion,
             backend=backend,
             reached_bastion=session.succeeded,
-            status=status,
             returncode=result.returncode,
             stdout=result.stdout,
             stderr=result.stderr,
