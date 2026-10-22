@@ -264,8 +264,15 @@ def administrator(module_dir: Path, maintainer_key: Path) -> Administrator:
 
 
 @pytest.fixture(scope="module")
-def playbook(administrator: Administrator) -> Path:
-    """The playbook of the default configuration, built once for the module."""
+def playbook(administrator: Administrator, llng: Llng) -> Path:
+    """The playbook of the default configuration, built once for the module.
+
+    ob-builder reads the SSO metadata, the SSH CA key and the revocation
+    list from the portal while building, so the portal runs its
+    configuration first. The dependency is stated here rather than left to
+    the order the Background of the feature happens to use.
+
+    """
     return administrator.generate_playbook()
 
 
