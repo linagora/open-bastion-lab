@@ -11,6 +11,7 @@ all:
         ob_server_group: bastion
         ob_client_id: pam-bastion
         ob_client_secret: pamsecret
+        ob_sso_jwks_fetch: true
       hosts:
         bastion-1:
           ansible_host: 192.168.122.2

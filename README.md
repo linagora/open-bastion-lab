@@ -322,7 +322,7 @@ playbook:
 ```bash
 ob-builder --config ../examples/ob-builder-local-with-auto-enrolment.yml --output-ansible .
 COOKIE=$(llng --llng-url http://auth.example.com  --login dwho --password dwho llng_cookie)
-ansible-playbook -i ../examples/inventory.yaml site.yml -e "ob_llng_cookie=$COOKIE"
+ansible-playbook -i ../examples/inventory.yml site.yml -e "ob_llng_cookie=$COOKIE"
 ```
 
 Once the play ends, users that own certificates from LLNG CA can
