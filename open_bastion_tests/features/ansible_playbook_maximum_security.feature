@@ -125,6 +125,7 @@ Feature: Ansible playbook for maximum security
     Then the result is fails
     Given user "msmith" has signed its SSH public key
     When user "msmith" tries to connect to "bastion-1" through SSH
+    # no refresh needed that time, thanks to use of serials in KRL
     Then the result is success
 
   Scenario: The cache keeps a user's access while the portal is down
