@@ -5,6 +5,7 @@ from pytest_bdd import scenario
 
 from open_bastion_tests.support.fleet import Fleet, data
 from open_bastion_tests.support.llng import Llng
+from open_bastion_tests.support.playbook import Administrator
 
 FEATURE = "ansible_playbook_maximum_security.feature"
 
@@ -12,10 +13,12 @@ FEATURE = "ansible_playbook_maximum_security.feature"
 # against. pytest needs them before the scenario starts, so they are given
 # here as well as in the feature.
 FLEET = "two-backends"
+CONFIGURATION = "ob-builder-max-security"
 LLNG_CONFIG = data("llng/with-two-oidc-rp/lmConf-with-plugins-configured.json")
 
 pytestmark = [
     pytest.mark.parametrize("fleet", [FLEET], indirect=True),
+    pytest.mark.parametrize("configuration", [CONFIGURATION], indirect=True),
     pytest.mark.parametrize(
         "llng", [LLNG_CONFIG], indirect=True, ids=[LLNG_CONFIG.stem]
     ),
@@ -23,13 +26,16 @@ pytestmark = [
 
 
 @pytest.fixture(autouse=True)
-def scenario_setup(fresh_fleet: Fleet, llng: Llng) -> None:
-    """Ask for the fleet and the portal before every scenario.
+def scenario_setup(
+    fresh_fleet: Fleet, llng: Llng, administrator: Administrator
+) -> None:
+    """Ask for everything the feature parametrizes, before every scenario.
 
-    Both are parametrized, and pytest binds a parametrized fixture to a
-    test only when the test asks for it while it is collected: a step
-    asking for them once the scenario is running comes too late. The
-    feature keeps them from one scenario to the next.
+    The fleet, the portal and the configuration ob-builder builds with are
+    parametrized, and pytest binds a parametrized fixture to a test only
+    when the test asks for it while it is collected: a step asking for them
+    once the scenario is running comes too late. The feature keeps them from
+    one scenario to the next.
 
     """
 

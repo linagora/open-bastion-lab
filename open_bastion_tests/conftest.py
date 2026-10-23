@@ -259,8 +259,21 @@ def llng(request: pytest.FixtureRequest, llng_runtime: Llng) -> Llng:
 
 
 @pytest.fixture(scope="module")
-def administrator(module_dir: Path, maintainer_key: Path) -> Administrator:
-    return Administrator(module_dir, maintainer_key)
+def configuration(request: pytest.FixtureRequest) -> str:
+    """Name of the ob-builder configuration the module names.
+
+    The Background of the feature tells the same name.
+
+    """
+    return str(_named(request, "configuration", "CONFIGURATION"))
+
+
+@pytest.fixture(scope="module")
+def administrator(
+    module_dir: Path, maintainer_key: Path, configuration: str
+) -> Administrator:
+    """The administrator, building with the configuration of the module."""
+    return Administrator(module_dir, maintainer_key, configuration)
 
 
 @pytest.fixture(scope="module")

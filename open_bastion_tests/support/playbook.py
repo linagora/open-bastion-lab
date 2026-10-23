@@ -12,7 +12,6 @@ from open_bastion_tests.support.llng import Session
 
 LOGGER = logging.getLogger(__name__)
 
-CONFIG_FILE = data("ob-builder-max-security.yml")
 INVENTORY_FILE = data("inventory.yml")
 
 KEY_PATTERN = re.compile(r"^(?P<indent>[ \t]*)public_key_file:.*$", re.MULTILINE)
@@ -50,33 +49,31 @@ def apt_repository_url() -> str:
 class Administrator:
     """An administrator deploying open-bastion on the fleet.
 
-    The key it is given is the one the tests made for the maintainer
-    account: no other key is involved, in the configuration handed to
-    ob-builder or in the inventory.
+    It builds with the configuration the module names, one of the files the
+    tests own, and with the key they made for the maintainer account: no
+    other key is involved, in that configuration or in the inventory.
 
     """
 
     work_dir: Path
     key: Path
+    configuration: str
 
-    def __init__(self, work_dir: Path, key: Path):
+    def __init__(self, work_dir: Path, key: Path, configuration: str):
         self.work_dir = work_dir
         self.key = key
-
-    @property
-    def configuration(self) -> str:
-        """Name of the configuration the administrator builds with."""
-        return CONFIG_FILE.stem
+        self.configuration = configuration
 
     def generate_playbook(self) -> Path:
-        """Generate the playbook of the default configuration.
+        """Generate the playbook of the configuration it was given.
 
         ob-builder reaches the portal while building: it reads the SSO
         metadata, the SSH CA key and the revocation list from it.
 
         """
-        config_file = self.work_dir / CONFIG_FILE.name
-        config_file.write_text(self._config())
+        source = data(f"{self.configuration}.yml")
+        config_file = self.work_dir / source.name
+        config_file.write_text(self._config(source))
 
         output = self.work_dir / "ansible"
         args = [
@@ -129,8 +126,8 @@ class Administrator:
         if result.returncode != 0:
             raise RuntimeError(f"Playing the playbook failed, see {log}")
 
-    def _config(self) -> str:
-        """The default configuration, with the key of the tests.
+    def _config(self, source: Path) -> str:
+        """The configuration to build with, holding the key of the tests.
 
         The test owned copy holds a path that is only valid next to the
         examples, so the key is written as an absolute path. The rest of the
@@ -139,10 +136,10 @@ class Administrator:
         """
         text, count = KEY_PATTERN.subn(
             rf"\g<indent>public_key_file: {public_key(self.key)}",
-            CONFIG_FILE.read_text(),
+            source.read_text(),
         )
         if count == 0:
-            raise RuntimeError(f"No public_key_file to set in {CONFIG_FILE}")
+            raise RuntimeError(f"No public_key_file to set in {source}")
         return text
 
     def _inventory(self) -> Path:
