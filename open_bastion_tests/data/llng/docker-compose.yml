@@ -1,0 +1,25 @@
+name: open-bastion-tests
+services:
+  llng:
+    image: yadd/lemonldap-ng-full:exp
+    environment:
+      - LOGGER=stderr
+      - USERLOGGER=stderr
+    ports:
+      - "80:80"
+    healthcheck:
+      test: ["CMD", "curl", "-sf", "http://localhost:80/"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    volumes:
+      - etc-data:/etc/lemonldap-ng
+      - conf-data:/var/lib/lemonldap-ng/conf
+      - sessions-data:/var/lib/lemonldap-ng/sessions
+      - psessions-data:/var/lib/lemonldap-ng/psessions
+
+volumes:
+  etc-data:
+  conf-data:
+  sessions-data:
+  psessions-data:

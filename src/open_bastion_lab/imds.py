@@ -44,8 +44,9 @@ class SeedCollect:
             self.vendor_data = True
 
     def seeded(self) -> bool:
-        return all([
-            self.network_config, self.meta_data, self.user_data, self.vendor_data])
+        return all(
+            [self.network_config, self.meta_data, self.user_data, self.vendor_data]
+        )
 
 
 class InstanceMetadataServer:
@@ -97,7 +98,7 @@ class InstanceMetadataServer:
         """Specialize the content of user-data, network-config, etc. files."""
         content = resource.read_text()
         if kind != "user-data" and kind != "network-config":
-            assert(not _is_cloud_config(content))
+            assert not _is_cloud_config(content)
             return content
 
         parsed = yaml.safe_load(content) or {}

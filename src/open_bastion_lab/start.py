@@ -44,7 +44,7 @@ class StartCommand(Command):
         await self._imds_service.start()
 
         async def start_and_wait(machine: Machine):
-            assert(self._imds_service)
+            assert self._imds_service
             if machine.state is MachineState.ABSENT:
                 await hypervisor.create(machine)
             await hypervisor.start(machine)

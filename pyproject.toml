@@ -26,8 +26,21 @@ build-backend = "uv_build"
 dev = [
     "black>=26.10.0",
     "mypy>=2.4.0",
+    "pytest>=9.1.1",
+    "pytest-bdd>=9.0.0",
+    "types-pyyaml>=6.0.12",
 ]
 
 [[tool.mypy.overrides]]
 module = ["libvirt.*"]
 follow_untyped_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["open_bastion_tests"]
+addopts = "-p open_bastion_tests.steps.ssh_access -p open_bastion_tests.steps.deployment -p open_bastion_tests.steps.debug -m 'not debug'"
+markers = [
+    "debug: configure the lab for debugging and wait on purpose",
+]
+pythonpath = ["."]
+bdd_features_base_dir = "open_bastion_tests/features"
+log_cli_level = "INFO"
