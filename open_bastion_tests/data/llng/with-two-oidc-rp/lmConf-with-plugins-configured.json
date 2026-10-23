@@ -139,9 +139,9 @@
    "certificateResetByMailValidityDelay": 0,
    "cfgAuthor": "dwho",
    "cfgAuthorIP": "172.18.0.1",
-   "cfgDate": 1792103342,
-   "cfgLog": "Fix PAM access sudo rules",
-   "cfgNum": "18",
+   "cfgDate": 1792765341,
+   "cfgLog": "Configure RPs JWKS",
+   "cfgNum": "19",
    "cfgVersion": "2.23.4",
    "checkDevOpsCheckSessionAttributes": "1",
    "checkDevOpsDisplayNormalizedHeaders": "1",
@@ -278,6 +278,14 @@
    "jsonFileUserPath": "",
    "key": "560cd788528440b4be084e4c6bd22d0b",
    "keys": {
+      "pam-access-keys": {
+         "keyPrivate": "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIEdCuygWuAe3onha5ksBBoUzP0LrWHV1Rj/UXgfeE94xoAoGCCqGSM49\nAwEHoUQDQgAEbirdYSCO0PPaFydr5kwwyUtKY7rLpA+xtsiU+0U/5Gx1NHjcMJk9\niDsB1f0A7Us4b+cRMGUeeb0B6sjX7PxXoA==\n-----END EC PRIVATE KEY-----\n",
+         "keyPublic": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEbirdYSCO0PPaFydr5kwwyUtKY7rL\npA+xtsiU+0U/5Gx1NHjcMJk9iDsB1f0A7Us4b+cRMGUeeb0B6sjX7PxXoA==\n-----END PUBLIC KEY-----\n"
+      },
+      "pam-bastion-keys": {
+         "keyPrivate": "-----BEGIN EC PRIVATE KEY-----\nMHcCAQEEIPIL9RbO4Wdw2KZi7I/ZC437bqQKrdnWwNDco34QNBavoAoGCCqGSM49\nAwEHoUQDQgAEggjiJJEVCYJknGmdFov4QM9+R+fg+ogorV3n82SUze4oWwCAGTxG\naHACLXuhrNvewxBUPn+rD8L7vDDX1bB7Yg==\n-----END EC PRIVATE KEY-----\n",
+         "keyPublic": "-----BEGIN PUBLIC KEY-----\nMFkwEwYHKoZIzj0CAQYIKoZIzj0DAQcDQgAEggjiJJEVCYJknGmdFov4QM9+R+fg\n+ogorV3n82SUze4oWwCAGTxGaHACLXuhrNvewxBUPn+rD8L7vDDX1bB7Yg==\n-----END PUBLIC KEY-----\n"
+      },
       "ssh-ca": {
          "keyPrivate": "-----BEGIN PRIVATE KEY-----\nMC4CAQAwBQYDK2VwBCIEIOXzbIG1+AwQ7ZRP+Mv7ZpgyIO8SAAZSBFPLzBnTGo75\n-----END PRIVATE KEY-----\n",
          "keyPublic": "-----BEGIN PUBLIC KEY-----\nMCowBQYDK2VwAyEA1d1bA0JlKpRiDNfs8PVhz1PS5WyueNRIMi4XT6Iro6A=\n-----END PUBLIC KEY-----\n"
@@ -421,7 +429,8 @@
       }
    },
    "oidcRPMetaDataMacros": {
-      "pam-access": {}
+      "pam-access": {},
+      "pam-bastion": {}
    },
    "oidcRPMetaDataOptions": {
       "pam-access": {
@@ -457,6 +466,8 @@
          "oidcRPMetaDataOptionsJarMaxAge": 0,
          "oidcRPMetaDataOptionsJarmEncContentEncAlg": "A256GCM",
          "oidcRPMetaDataOptionsJarmSignAlg": "RS256",
+         "oidcRPMetaDataOptionsJwks": "{\n  \"keys\": [\n    {\n      \"kty\": \"EC\",\n      \"crv\": \"P-256\",\n      \"x\": \"birdYSCO0PPaFydr5kwwyUtKY7rLpA-xtsiU-0U_5Gw\",\n      \"y\": \"dTR43DCZPYg7AdX9AO1LOG_nETBlHnm9AerI1-z8V6A\",\n      \"kid\": \"MTuE38-QpN9VBzN_uqpQBhdpyvb0s43UOM0xRO8WHUw\",\n      \"use\": \"sig\",\n      \"alg\": \"ES256\"\n    }\n  ]\n}\n",
+         "oidcRPMetaDataOptionsJwksUri": "",
          "oidcRPMetaDataOptionsLogoutBypassConfirm": 0,
          "oidcRPMetaDataOptionsLogoutEncContentEncAlg": "A256GCM",
          "oidcRPMetaDataOptionsLogoutSessionRequired": 0,
@@ -469,6 +480,7 @@
          "oidcRPMetaDataOptionsRequirePKCE": "1",
          "oidcRPMetaDataOptionsRequireSignedRequestObject": 0,
          "oidcRPMetaDataOptionsRtActivity": 2592000,
+         "oidcRPMetaDataOptionsSigningKey": "pam-access-keys",
          "oidcRPMetaDataOptionsUserInfoEncContentEncAlg": "A256GCM",
          "oidcRPMetaDataOptionsUserinfoRequireHeaderToken": 0
       },
@@ -514,6 +526,8 @@
          "oidcRPMetaDataOptionsJarmEncContentEncAlg": "A256GCM",
          "oidcRPMetaDataOptionsJarmEncKeyMgtAlg": "",
          "oidcRPMetaDataOptionsJarmSignAlg": "RS256",
+         "oidcRPMetaDataOptionsJwks": "{\n  \"keys\": [\n    {\n      \"kty\": \"EC\",\n      \"crv\": \"P-256\",\n      \"x\": \"ggjiJJEVCYJknGmdFov4QM9-R-fg-ogorV3n82SUze4\",\n      \"y\": \"KFsAgBk8RmhwAi17oazb3sMQVD5_qw_C-7ww19Wwe2I\",\n      \"kid\": \"76kvmEV9-3VkycZ_hUg-EBaiRalHWMbfJEPcxPGI83Q\",\n      \"use\": \"sig\",\n      \"alg\": \"ES256\"\n    }\n  ]\n}\n",
+         "oidcRPMetaDataOptionsJwksUri": "",
          "oidcRPMetaDataOptionsLogoutBypassConfirm": 0,
          "oidcRPMetaDataOptionsLogoutEncContentEncAlg": "A256GCM",
          "oidcRPMetaDataOptionsLogoutEncKeyMgtAlg": "",
@@ -527,6 +541,7 @@
          "oidcRPMetaDataOptionsRequirePKCE": "1",
          "oidcRPMetaDataOptionsRequireSignedRequestObject": 0,
          "oidcRPMetaDataOptionsRtActivity": 2592000,
+         "oidcRPMetaDataOptionsSigningKey": "pam-bastion-keys",
          "oidcRPMetaDataOptionsUserInfoEncContentEncAlg": "A256GCM",
          "oidcRPMetaDataOptionsUserInfoEncKeyMgtAlg": "",
          "oidcRPMetaDataOptionsUserInfoSignAlg": "",
@@ -534,10 +549,12 @@
       }
    },
    "oidcRPMetaDataOptionsExtraClaims": {
-      "pam-access": {}
+      "pam-access": {},
+      "pam-bastion": {}
    },
    "oidcRPMetaDataScopeRules": {
-      "pam-access": {}
+      "pam-access": {},
+      "pam-bastion": {}
    },
    "oidcRPStateTimeout": "600",
    "oidcServiceAccessTokenExpiration": "3600",
@@ -640,7 +657,7 @@
    "pamAccessRequestSigningSecret": "",
    "pamAccessRequestSigningWindow": 300,
    "pamAccessRequireFingerprint": 0,
-   "pamAccessResponseSigningAlg": "",
+   "pamAccessResponseSigningAlg": "ES256",
    "pamAccessRp": "pam-access",
    "pamAccessServerGroups": {
       "pam-access": "backend",

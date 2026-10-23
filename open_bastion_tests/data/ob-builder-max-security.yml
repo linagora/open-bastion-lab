@@ -11,7 +11,8 @@ portal_url: "http://auth.example.com"
 # yes: allow an http:// portal and skip TLS verification, here and on the
 # targets (verify_ssl = false, ob-enroll/setup -k). Test setups only.
 insecure: "yes"
-response_signing: "off"
+response_signing: "prefer"
+
 client_id: "pam-access"
 # fixed | modifiable (the target admin may override it with --client-id)
 client_id_policy: "modifiable"
