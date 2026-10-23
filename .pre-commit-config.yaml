@@ -1,10 +1,16 @@
-# Hooks run through uv: they use the environment and the versions uv.lock
-# pins, and write nothing of their own. Install them once with
-#   uv run pre-commit install
-#
-# The suite itself needs a free lab, the portal and the package server: it runs
-# by hand, and this file does not try.
+# uv run pre-commit install
 repos:
+  - repo: https://github.com/codespell-project/codespell
+    rev: v2.4.3
+    hooks:
+      - id: codespell
+        args: [--skip, ".venv,uv.lock,*.json"]
+
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v6.0.0
+    hooks:
+      - id: check-yaml
+
   - repo: local
     hooks:
       - id: black
@@ -21,10 +27,6 @@ repos:
         types: [python]
         pass_filenames: false
 
-      # Cheap: it fails on a module that cannot be imported, or a scenario
-      # naming what its feature does not hold. Steps are matched when a
-      # scenario runs, so a missing step, or one declared with another
-      # keyword than the feature writes, is not seen here.
       - id: pytest-collect
         name: pytest collects the tests
         entry: uv run pytest --collect-only -q
