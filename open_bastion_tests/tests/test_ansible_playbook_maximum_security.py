@@ -85,8 +85,13 @@ def test_sudo_removed() -> None:
     pass
 
 
-@scenario(FEATURE, "The bastion serves the service-account keys")
-def test_service_account_keys_are_served() -> None:
+@scenario(FEATURE, "A service account reach the bastion but can't sudo")
+def test_service_account_on_backends() -> None:
+    pass
+
+
+@scenario(FEATURE, "A service account reach the backends but can't sudo")
+def test_service_account_on_backends() -> None:
     pass
 
 

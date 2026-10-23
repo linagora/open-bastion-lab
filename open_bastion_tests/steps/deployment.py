@@ -37,30 +37,6 @@ SERVICE_KEYS_PATTERNS = (
 # what it does not answer
 SUDO_STACK_PATTERNS = (r"pam_openbastion\.so", r"pam_deny\.so")
 
-
-@then(parsers.re(r'the bastion "(?P<name>[^"]+)" serves the service-account keys'))
-def bastion_serves_service_account_keys(name: str, deployed_fleet: Fleet) -> None:
-    """The drop-in that offers the keys is there, and complete."""
-    machine = deployed_fleet.machine(name)
-    if not guest_agent.exists(machine.name, SERVICE_KEYS_DROP_IN):
-        pytest.fail(
-            f"{name} has no {SERVICE_KEYS_DROP_IN}: sshd does not serve the "
-            f"keys of the service accounts",
-            pytrace=False,
-        )
-    content = deployed_fleet.read_as_root(machine, SERVICE_KEYS_DROP_IN)
-    missing = [
-        pattern for pattern in SERVICE_KEYS_PATTERNS if not _matches(content, pattern)
-    ]
-    if missing:
-        pytest.fail(
-            f"{SERVICE_KEYS_DROP_IN} of {name} does not serve the keys of the "
-            f"service accounts, it misses {', '.join(missing)}:\n{content}",
-            pytrace=False,
-        )
-    LOGGER.info("%s serves the service-account keys", name)
-
-
 @then(parsers.re(r'the sudo stack of "(?P<name>[^"]+)" asks the portal'))
 def sudo_stack_asks_the_portal(name: str, deployed_fleet: Fleet) -> None:
     """Elevation on the host goes through the portal."""
