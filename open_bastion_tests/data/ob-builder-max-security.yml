@@ -25,6 +25,10 @@ server_group_policy: "modifiable"
 # bastion | standalone | backend; several, comma-separated, give one
 # artefact each, suffixed with the role
 target_role: "bastion,backend"
+# Roles enrolling with another relying party than client_id
+roles:
+  bastion:
+    client_id: "pam-bastion"
 # backend only: bastion ids allowed to reach it, comma-separated (empty =
 # any bastion enrolled in the same server group)
 allowed_bastions: null
