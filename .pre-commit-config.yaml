@@ -21,8 +21,10 @@ repos:
         types: [python]
         pass_filenames: false
 
-      # Cheap, and it is what catches an undefined step or a fixture the
-      # module does not name: both fail before any machine is created.
+      # Cheap: it fails on a module that cannot be imported, or a scenario
+      # naming what its feature does not hold. Steps are matched when a
+      # scenario runs, so a missing step, or one declared with another
+      # keyword than the feature writes, is not seen here.
       - id: pytest-collect
         name: pytest collects the tests
         entry: uv run pytest --collect-only -q

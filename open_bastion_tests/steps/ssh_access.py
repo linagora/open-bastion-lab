@@ -207,7 +207,7 @@ def administrator_drops_authorization_cache(fresh_fleet: Fleet) -> None:
     fresh_fleet.forget_authorizations()
 
 
-@given("the portal is down")
+@when("the portal is down")
 def portal_is_down(portal_down: None) -> None:
     """The portal is stopped by the fixture, and started again after it.
 
