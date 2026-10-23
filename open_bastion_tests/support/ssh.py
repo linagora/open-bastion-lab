@@ -378,7 +378,9 @@ class User:
             log=log,
         )
 
-    def hop(self, bastion: str, backend: str, ssh_config: Path) -> HopResult:
+    def hop(
+        self, bastion: str, backend: str, ssh_config: Path, command: str = "true"
+    ) -> HopResult:
         """Reach a backend from a bastion, the way a user of the fleet would.
 
         The bastion is asked for a session first: without one there is
@@ -391,7 +393,7 @@ class User:
         result = self._run(
             bastion,
             ssh_config,
-            f"ob-ssh {backend} true",
+            f"ob-ssh {backend} '{command}'",
             log,
         )
         LOGGER.debug(

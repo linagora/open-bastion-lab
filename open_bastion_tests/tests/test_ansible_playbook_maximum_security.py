@@ -110,6 +110,11 @@ def test_revoked_certificate() -> None:
     pass
 
 
+@scenario(FEATURE, "The bastion records what a user does on a backend")
+def test_session_recording() -> None:
+    pass
+
+
 @scenario(FEATURE, "The cache keeps a user's access while the portal is down")
 def test_cache_while_portal_down() -> None:
     pass

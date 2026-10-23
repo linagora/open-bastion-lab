@@ -128,6 +128,15 @@ Feature: Ansible playbook for maximum security
     # no refresh needed that time, thanks to use of serials in KRL
     Then the result is success
 
+  Scenario: The bastion records what a user does on a backend
+    Given user "msmith" has signed its SSH public key
+    When user "msmith" hops from "bastion-1" to "backend-1" through SSH and runs "echo first-command; echo output-$((40+2)); nohup sleep 60 >/dev/null 2>&1 & echo nohup-attempted"
+    Then the result is success
+    And the recording of "msmith" on "bastion-1" holds:
+      | first-command   |
+      | output-42       |
+      | nohup-attempted |
+
   Scenario: The cache keeps a user's access while the portal is down
     Given user "rtyler" has signed its SSH public key
     When user "rtyler" tries to connect to "bastion-1" through SSH

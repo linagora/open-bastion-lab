@@ -26,6 +26,7 @@ from open_bastion_tests.support.ssh import (
 )
 
 CA_KEY = "/etc/ssh/open-bastion_ca.pub"
+SESSIONS = "/var/lib/open-bastion/sessions"
 
 
 @given(parsers.re(r'the fleet "(?P<name>[^"]+)" is ready'))
@@ -349,6 +350,53 @@ def user_hops(
 
     """
     return user_factory(name).hop(bastion, backend, user_ssh_config)
+
+
+@when(
+    parsers.re(
+        r'user "?(?P<name>[\w.-]+)"? hops from "(?P<bastion>[\w.-]+)" '
+        r'to "(?P<backend>[\w.-]+)" through SSH and runs "(?P<command>[^"]+)"'
+    ),
+    target_fixture="connection",
+)
+def user_hops_and_runs(
+    name: str,
+    bastion: str,
+    backend: str,
+    command: str,
+    user_factory: Callable[[str], User],
+    user_ssh_config: Path,
+) -> HopResult:
+    """Reach the backend and run the given commands there."""
+    return user_factory(name).hop(bastion, backend, user_ssh_config, command)
+
+
+@then(
+    parsers.re(r'the recording of "(?P<name>[^"]+)" on "(?P<bastion>[\w.-]+)" holds:')
+)
+def recording_holds(
+    name: str,
+    bastion: str,
+    datatable: list[list[str]],
+    deployed_fleet: Fleet,
+) -> None:
+    """What the session printed is in the recordings of the bastion."""
+    machine = deployed_fleet.machine(bastion)
+    recordings = deployed_fleet.run_as_root(
+        machine, f"cat {SESSIONS}/{name}/*.typescript"
+    )
+    if not recordings.succeeded:
+        pytest.fail(
+            f"{bastion} recorded no session of {name}: {recordings.describe()}",
+            pytrace=False,
+        )
+    missing = [row[0] for row in datatable if row[0] not in recordings.stdout]
+    if missing:
+        pytest.fail(
+            f"The recording of {name} on {bastion} does not hold {missing}:\n"
+            f"{recordings.stdout[-2000:]}",
+            pytrace=False,
+        )
 
 
 @given(
