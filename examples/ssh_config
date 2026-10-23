@@ -2,16 +2,22 @@ Host bastion-1
     HostName 192.168.122.2
     IdentityFile "~/.ssh/id_%r"
     IdentitiesOnly yes
+    GlobalKnownHostsFile /dev/null
+    UserKnownHostsFile /dev/null
     # dwho, rtyler, etc. uses their own identity file
 
 Host backend-1
     HostName 192.168.122.66
     IdentityFile "~/.ssh/id_%r"
     IdentitiesOnly yes
+    GlobalKnownHostsFile /dev/null
+    UserKnownHostsFile /dev/null
     # dwho, rtyler, etc. uses their own identity file
 
 Host backend-2
     HostName 192.168.122.67
     IdentityFile "~/.ssh/id_%r"
     IdentitiesOnly yes
+    GlobalKnownHostsFile /dev/null
+    UserKnownHostsFile /dev/null
     # dwho, rtyler, etc. uses their own identity file
