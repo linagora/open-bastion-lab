@@ -10,6 +10,7 @@ from http.cookiejar import CookieJar
 from pathlib import Path
 from typing import Any
 
+import base64
 import json
 import logging
 import re
@@ -27,6 +28,7 @@ PORTAL_URL = "http://auth.example.com"
 CONTAINER = "llng"
 CONTAINER_CONF_DIR = "/var/lib/lemonldap-ng/conf"
 CONTAINER_SSH_DIR = "/var/lib/lemonldap-ng/ssh"
+CONTAINER_KRL = f"{CONTAINER_SSH_DIR}/revoked_keys"
 
 JWKS_TRIES = 30
 PORTAL_TRIES = 60
@@ -149,9 +151,24 @@ class Llng:
 
     def up(self) -> None:
         self._compose("up", "-d", "--wait")
-        # The SSH CA plugin rewrites the revocation list on every signature.
+        # The SSH CA plugin writes the revocation list as www-data.
         self._exec(
             "install", "-d", "-o", "www-data", "-g", "www-data", CONTAINER_SSH_DIR
+        )
+
+    def publish_revocation_list(self, krl: Path) -> None:
+        """Serve the given KRL at /ssh/revoked.
+
+        The list is binary: it goes through the container's stdin as base64.
+
+        """
+        encoded = base64.b64encode(krl.read_bytes()).decode()
+        self._exec(
+            "sh",
+            "-c",
+            f"base64 -d > {CONTAINER_KRL} && chown www-data {CONTAINER_KRL}"
+            f" && chmod 0644 {CONTAINER_KRL}",
+            stdin=encoded,
         )
 
     def stop(self) -> None:

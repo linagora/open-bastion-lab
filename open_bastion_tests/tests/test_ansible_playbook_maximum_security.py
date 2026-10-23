@@ -105,6 +105,11 @@ def test_backends_accept_only_the_bastion() -> None:
     pass
 
 
+@scenario(FEATURE, "A revoked certificate is refused once the list is refreshed")
+def test_revoked_certificate() -> None:
+    pass
+
+
 @scenario(FEATURE, "The cache keeps a user's access while the portal is down")
 def test_cache_while_portal_down() -> None:
     pass

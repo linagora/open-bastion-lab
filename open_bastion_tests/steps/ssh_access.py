@@ -6,6 +6,8 @@ from pathlib import Path
 import pytest
 from pytest_bdd import given, parsers, then, when
 
+from open_bastion_lab.model import Role
+
 from open_bastion_tests.support.fleet import (
     AUTHORIZATION_CACHE,
     Fleet,
@@ -20,7 +22,10 @@ from open_bastion_tests.support.ssh import (
     SshResult,
     SudoResult,
     User,
+    revocation_list,
 )
+
+CA_KEY = "/etc/ssh/open-bastion_ca.pub"
 
 
 @given(parsers.re(r'the fleet "(?P<name>[^"]+)" is ready'))
@@ -97,7 +102,6 @@ def administrator_plays_playbook(deployed_fleet: Fleet) -> None:
     # the quotes, and the portal would be asked about a user called
     # '"rtyler"', which it does not know.
     parsers.re(r'user "?(?P<name>[\w.-]+)"? has signed its SSH public key'),
-    target_fixture="user",
 )
 def user_signs_its_public_key(
     name: str,
@@ -133,7 +137,6 @@ def user_signs_its_public_key(
     parsers.re(
         r'user "(?P<name>[^"]+)" has copied its SSH public key to "(?P<host>[^"]+)"'
     ),
-    target_fixture="user",
 )
 def user_copies_its_public_key(
     name: str,
@@ -316,8 +319,13 @@ def service_account_runs_sudo(
     ),
     target_fixture="connection",
 )
-def user_connects(name: str, host: str, user: User, user_ssh_config: Path) -> SshResult:
-    return user.connect(host, user_ssh_config)
+def user_connects(
+    name: str,
+    host: str,
+    user_factory: Callable[[str], User],
+    user_ssh_config: Path,
+) -> SshResult:
+    return user_factory(name).connect(host, user_ssh_config)
 
 
 @when(
@@ -328,7 +336,11 @@ def user_connects(name: str, host: str, user: User, user_ssh_config: Path) -> Ss
     target_fixture="connection",
 )
 def user_hops(
-    name: str, bastion: str, backend: str, user: User, user_ssh_config: Path
+    name: str,
+    bastion: str,
+    backend: str,
+    user_factory: Callable[[str], User],
+    user_ssh_config: Path,
 ) -> HopResult:
     """Open a session on the bastion, and reach the backend from there.
 
@@ -336,7 +348,7 @@ def user_hops(
     hop is the way the fleet intends a user to reach one.
 
     """
-    return user.hop(bastion, backend, user_ssh_config)
+    return user_factory(name).hop(bastion, backend, user_ssh_config)
 
 
 @given(
@@ -345,7 +357,6 @@ def user_hops(
 )
 def user_has_a_temporary_token(
     name: str,
-    user: User,
     portal_sessions: Callable[[str], Session | None],
     llng: Llng,
 ) -> str:
@@ -355,8 +366,6 @@ def user_has_a_temporary_token(
     machines consumes it at the first use.
 
     """
-    if user.name != name:
-        pytest.fail(f"The feature names {name}, but the user is {user.name}")
     session = portal_sessions(name)
     if session is None:
         pytest.fail(f"{name} has no session on the portal, there is no token to give")
@@ -370,10 +379,53 @@ def user_has_a_temporary_token(
     target_fixture="connection",
 )
 def user_runs_sudo(
-    name: str, host: str, user: User, token: str, user_ssh_config: Path
+    name: str,
+    host: str,
+    user_factory: Callable[[str], User],
+    token: str,
+    user_ssh_config: Path,
 ) -> SudoResult:
     """Open a session on the machine and try to elevate there."""
-    return user.sudo(host, token, user_ssh_config)
+    return user_factory(name).sudo(host, token, user_ssh_config)
+
+
+@when(
+    parsers.re(
+        r'user "?(?P<name>[\w.-]+)"? runs sudo "(?P<command>[^"]+)" '
+        r'on "(?P<host>[\w.-]+)" through SSH'
+    ),
+    target_fixture="connection",
+)
+def user_runs_sudo_command(
+    name: str,
+    command: str,
+    host: str,
+    user_factory: Callable[[str], User],
+    token: str,
+    user_ssh_config: Path,
+) -> SudoResult:
+    """Run one command through sudo, with the token of the portal."""
+    return user_factory(name).sudo_command(host, command, token, user_ssh_config)
+
+
+@given(parsers.re(r'the administrator revokes the certificate of "(?P<name>[^"]+)"'))
+def administrator_revokes_certificate(
+    name: str,
+    user_factory: Callable[[str], User],
+    deployed_fleet: Fleet,
+    llng: Llng,
+    scenario_dir: Path,
+) -> None:
+    """Publish on the portal a list that revokes the certificate of the user."""
+    bastion = next(
+        machine for machine in deployed_fleet.machines() if machine.type is Role.BASTION
+    )
+    ca_key = scenario_dir / "open-bastion_ca.pub"
+    ca_key.write_text(deployed_fleet.read_as_root(bastion, CA_KEY))
+    krl = revocation_list(
+        user_factory(name).certificate, ca_key, scenario_dir / "revoked_keys"
+    )
+    llng.publish_revocation_list(krl)
 
 
 @when(
@@ -387,12 +439,12 @@ def user_runs_sudo_from(
     name: str,
     backend: str,
     bastion: str,
-    user: User,
+    user_factory: Callable[[str], User],
     token: str,
     user_ssh_config: Path,
 ) -> SudoResult:
     """Open a session on the bastion and try to elevate on the backend."""
-    return user.sudo_from(bastion, backend, token, user_ssh_config)
+    return user_factory(name).sudo_from(bastion, backend, token, user_ssh_config)
 
 
 @then(parsers.parse("the result is {expected}"))

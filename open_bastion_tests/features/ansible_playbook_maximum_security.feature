@@ -108,6 +108,25 @@ Feature: Ansible playbook for maximum security
   Scenario: The backends only accept the bastion of the fleet
     Then the backends accept only the bastion "bastion-1"
 
+  Scenario: A revoked certificate is refused once the list is refreshed
+    Given user "msmith" has signed its SSH public key
+    When user "msmith" tries to connect to "bastion-1" through SSH
+    Then the result is success
+    Given user "rtyler" has signed its SSH public key
+    Given the administrator revokes the certificate of "msmith"
+    Given the administrator set pam-access sudo rule to:
+      | bastion | $uid eq "rtyler" |
+    And the portal workers reloaded the configuration
+    And the administrator drops the authorization cache of the fleet
+    Given user "rtyler" has a temporary token from the portal
+    When user "rtyler" runs sudo "ob-krl-refresh" on "bastion-1" through SSH
+    Then the result is success
+    When user "msmith" tries to connect to "bastion-1" through SSH
+    Then the result is fails
+    Given user "msmith" has signed its SSH public key
+    When user "msmith" tries to connect to "bastion-1" through SSH
+    Then the result is success
+
   Scenario: The cache keeps a user's access while the portal is down
     Given user "rtyler" has signed its SSH public key
     When user "rtyler" tries to connect to "bastion-1" through SSH

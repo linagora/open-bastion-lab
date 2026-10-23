@@ -191,6 +191,23 @@ class SudoResult:
         )
 
 
+def revocation_list(certificate: Path, ca_key: Path, output: Path) -> Path:
+    """Write a KRL that revokes the certificate, signed by that CA."""
+    args = [
+        command.which("ssh-keygen"),
+        "-k",
+        "-f",
+        str(output),
+        "-s",
+        str(ca_key),
+        str(certificate),
+    ]
+    result = command.run(args)
+    if result.returncode != 0 or not output.is_file():
+        raise RuntimeError(f"Failed to write {output}: {result.stderr}")
+    return output
+
+
 @dataclass
 class ServiceAccount:
     """An account the deployment serves a key for, with no portal session.
@@ -398,6 +415,12 @@ class User:
     def sudo(self, host: str, token: str, ssh_config: Path) -> SudoResult:
         """Try to run sudo on the machine the user connects to."""
         return self._sudo(host, host, self._sudo_command(token), ssh_config)
+
+    def sudo_command(
+        self, host: str, command: str, token: str, ssh_config: Path
+    ) -> SudoResult:
+        """Run one command through sudo, with the token of the portal."""
+        return self._sudo(host, host, f"echo {token} | sudo -S {command}", ssh_config)
 
     def sudo_from(
         self, bastion: str, backend: str, token: str, ssh_config: Path
