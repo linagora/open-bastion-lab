@@ -30,7 +30,7 @@ from open_bastion_tests.support import command
 from open_bastion_tests.support.fleet import Fleet, data
 from open_bastion_tests.support.llng import ADMIN_USER, Llng, Session
 from open_bastion_tests.support.playbook import Administrator, apt_repository_url
-from open_bastion_tests.support.ssh import User
+from open_bastion_tests.support.ssh import ServiceAccount, User
 
 MAINTAINER_KEY_NAME = "id_ob_tests_maintainer"
 
@@ -370,6 +370,26 @@ def user_factory(scenario_dir: Path) -> Callable[[str], User]:
         return User(name=name, home=home)
 
     return factory
+
+
+@pytest.fixture
+def service_account(
+    scenario_dir: Path, maintainer_key: Path
+) -> Callable[[str], ServiceAccount]:
+    """The accounts the deployment serves a key for, by the name it gives them.
+
+    The key is the one the tests write into the configuration they hand to
+    ob-builder: the machine serves it itself, so the account logs in
+    without a session on the portal.
+
+    """
+    home = scenario_dir / "service-account"
+    home.mkdir(parents=True, exist_ok=True)
+
+    def account(name: str) -> ServiceAccount:
+        return ServiceAccount(name=name, key=maintainer_key, home=home)
+
+    return account
 
 
 @pytest.fixture

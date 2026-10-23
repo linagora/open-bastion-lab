@@ -90,11 +90,17 @@ Feature: Ansible playbook for maximum security
     When user "rtyler" runs sudo on "backend-2" from "bastion-1" through SSH
     Then the result is fails
 
-  # What the deployment left behind, read with the guest agent of the
-  # machines: a configured fleet has no local account left that can
-  # elevate, so these cannot be checked over SSH.
-  Scenario: The bastion serves the service-account keys
-    Then the bastion "bastion-1" serves the service-account keys
+  Scenario: A service account reach the bastion but can't sudo
+    When service account "maintainer" tries to connect to "bastion-1" through SSH
+    Then the result is success
+    When service account "maintainer" runs sudo on "bastion-1" through SSH
+    Then the result is fails
+
+  Scenario: A service account reach the backends but can't sudo
+    When service account "maintainer" tries to connect to "backend-1" through SSH
+    Then the result is success
+    When service account "maintainer" runs sudo on "backend-1" through SSH
+    Then the result is fails
 
   Scenario: Sudo on the bastion goes through the portal
     Then the sudo stack of "bastion-1" asks the portal

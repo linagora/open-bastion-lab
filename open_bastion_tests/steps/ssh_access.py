@@ -12,6 +12,7 @@ from open_bastion_tests.support.playbook import Administrator
 from open_bastion_tests.support.ssh import (
     Connection,
     HopResult,
+    ServiceAccount,
     SshResult,
     SudoResult,
     User,
@@ -200,6 +201,51 @@ def administrator_drops_authorization_cache(fresh_fleet: Fleet) -> None:
 
     """
     fresh_fleet.forget_authorizations()
+
+
+@when(
+    parsers.re(
+        r'service account "(?P<name>[^"]+)" tries to connect to "(?P<host>[\w.-]+)" '
+        r"through SSH"
+    ),
+    target_fixture="connection",
+)
+def service_account_connects(
+    name: str,
+    host: str,
+    deployed_fleet: Fleet,
+    service_account: Callable[[str], ServiceAccount],
+) -> SshResult:
+    """Try the key the deployment serves for the account.
+
+    sshd serves it from the configuration ob-builder was given, so the
+    machine lets the account in on its own: no session, no certificate and
+    no portal are involved.
+
+    """
+    return service_account(name).connect(deployed_fleet.machine(host))
+
+
+@when(
+    parsers.re(
+        r'service account "(?P<name>[^"]+)" runs sudo on "(?P<host>[\w.-]+)" '
+        r"through SSH"
+    ),
+    target_fixture="connection",
+)
+def service_account_runs_sudo(
+    name: str,
+    host: str,
+    deployed_fleet: Fleet,
+    service_account: Callable[[str], ServiceAccount],
+) -> SudoResult:
+    """Try to elevate as the account, with nothing to give sudo.
+
+    The account has no session on the portal, so the PAM stack of a
+    configured machine has nothing to check the elevation against.
+
+    """
+    return service_account(name).sudo(deployed_fleet.machine(host))
 
 
 @when(

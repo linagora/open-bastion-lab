@@ -7,6 +7,8 @@ from typing import Protocol
 import logging
 import subprocess
 
+from open_bastion_lab.machine import Machine
+
 from open_bastion_tests.support import command
 
 LOGGER = logging.getLogger(__name__)
@@ -16,7 +18,7 @@ AUTHENTICATION_REFUSED = "Permission denied"
 CONNECTION_CLOSED = "Connection closed by"
 CERTIFICATE_REFUSED = "refused to issue a certificate"
 
-# Failures of the hop itself, which decide nothing about the fleet.
+# Failures of the attempt itself, which decide nothing about the fleet.
 UNREACHABLE = (
     "Connection refused",
     "No route to host",
@@ -24,6 +26,11 @@ UNREACHABLE = (
     "Could not resolve hostname",
     "command not found",
 )
+
+
+def _unreachable(output: str) -> bool:
+    """True when an attempt failed before the machine could answer."""
+    return any(marker in output for marker in UNREACHABLE)
 
 
 class Connection(Protocol):
@@ -119,7 +126,7 @@ class HopResult:
         """
         if not self.reached_bastion or self.succeeded:
             return False
-        if any(marker in self.output for marker in UNREACHABLE):
+        if _unreachable(self.output):
             return False
         return any(
             marker in self.output
@@ -156,15 +163,120 @@ class SudoResult:
         return self.status == 0
 
     @property
+    def output(self) -> str:
+        """What the attempt printed, whichever stream it printed it on.
+
+        A sudo tried from a bastion goes through the recorder, which merges
+        the streams: ssh says why it failed on stdout as often as on stderr.
+
+        """
+        return self.stdout + self.stderr
+
+    @property
     def denied(self) -> bool:
-        """True when the machine ran sudo and refused it."""
-        return self.status != 0
+        """True when the machine ran sudo and refused it.
+
+        A machine that cannot be reached fails without deciding anything:
+        it does not count as a refusal.
+
+        """
+        if self.succeeded:
+            return False
+        return not _unreachable(self.output)
 
     def describe(self) -> str:
         return (
             f"sudo as {self.user} on {self.host} (sudo exit {self.status})\n"
             f"{self.stdout.strip()}\n{self.stderr.strip()}\nsee {self.log}"
         )
+
+
+@dataclass
+class ServiceAccount:
+    """An account the deployment serves a key for, with no portal session.
+
+    Its key is the one named by the configuration ob-builder was given, and
+    sshd serves it through its AuthorizedKeysCommand: the account logs in
+    without the portal, and has nothing to answer when sudo asks it for the
+    token of the portal.
+
+    """
+
+    name: str
+    key: Path
+    home: Path
+
+    def connect(self, machine: Machine) -> SshResult:
+        """Try to open a session on a machine with the key of the account."""
+        log = self.home / f"connect-{machine.name}.log"
+        result = self._run(machine, "true", log)
+        LOGGER.debug(
+            "ssh %s@%s returned %s", self.name, machine.name, result.returncode
+        )
+        return SshResult(
+            user=self.name,
+            host=machine.name,
+            returncode=result.returncode,
+            stdout=result.stdout,
+            stderr=result.stderr,
+            signed=False,
+            log=log,
+        )
+
+    def sudo(self, machine: Machine) -> SudoResult:
+        """Try to elevate as the account, as the fleet leaves it.
+
+        Nothing is given to sudo: the account has no session on the portal,
+        so the deployment either lets the elevation through, as it does
+        before the setup, or refuses it.
+
+        """
+        log = self.home / f"sudo-{machine.name}.log"
+        result = self._run(machine, "sudo -n true", log)
+        LOGGER.debug(
+            "sudo as %s on %s returned %s", self.name, machine.name, result.returncode
+        )
+        return SudoResult(
+            user=self.name,
+            host=machine.name,
+            status=result.returncode,
+            stdout=result.stdout,
+            stderr=result.stderr,
+            log=log,
+        )
+
+    def _run(
+        self, machine: Machine, remote: str, log: Path
+    ) -> subprocess.CompletedProcess[str]:
+        """Run a command there with the key of the account, and only that one.
+
+        The account has one identity, and the machine it is served by is
+        named by the fleet: the ssh configuration of the users, which
+        resolves an identity file per remote user, does not apply.
+
+        """
+        args = [
+            command.which("ssh"),
+            "-F",
+            "/dev/null",
+            "-i",
+            str(self.key),
+            "-o",
+            "IdentitiesOnly=yes",
+            "-o",
+            f"UserKnownHostsFile={self.home / 'known_hosts'}",
+            "-o",
+            "StrictHostKeyChecking=accept-new",
+            "-o",
+            "BatchMode=yes",
+            "-o",
+            f"ConnectTimeout={CONNECT_TIMEOUT}",
+            f"{self.name}@{machine.ip}",
+            remote,
+        ]
+        result = command.run(args, timeout=120.0)
+        command.write_log(log, args, result)
+        return result
 
 
 @dataclass
