@@ -81,5 +81,25 @@ def backends_accept_only_the_bastion(bastion: str, deployed_fleet: Fleet) -> Non
         LOGGER.info("%s accepts only %s", backend.name, identifier)
 
 
+@then(parsers.re(r'no process of "(?P<name>[^"]+)" is left on "(?P<host>[\w.-]+)"'))
+def no_process_is_left(name: str, host: str, deployed_fleet: Fleet) -> None:
+    """The machine took down what the closed session left running.
+
+    The hardening turns on logind's own cleanup of a session's processes, so
+    a command started with nohup does not outlive the session.
+
+    """
+    machine = deployed_fleet.machine(host)
+    result = deployed_fleet.run_as_root(
+        machine,
+        f"for i in $(seq 1 20); do pgrep -u {name} >/dev/null || exit 0; sleep 1; done;"
+        f" pgrep -a -u {name}; exit 1",
+    )
+    if not result.succeeded:
+        pytest.fail(
+            f"{host} still runs processes of {name}:\n{result.stdout}", pytrace=False
+        )
+
+
 def _matches(content: str, pattern: str) -> bool:
     return re.search(pattern, content, re.MULTILINE) is not None
