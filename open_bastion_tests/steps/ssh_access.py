@@ -6,7 +6,11 @@ from pathlib import Path
 import pytest
 from pytest_bdd import given, parsers, then, when
 
-from open_bastion_tests.support.fleet import Fleet
+from open_bastion_tests.support.fleet import (
+    AUTHORIZATION_CACHE,
+    Fleet,
+    authorization_entry,
+)
 from open_bastion_tests.support.llng import Llng, Session
 from open_bastion_tests.support.playbook import Administrator
 from open_bastion_tests.support.ssh import (
@@ -201,6 +205,64 @@ def administrator_drops_authorization_cache(fresh_fleet: Fleet) -> None:
 
     """
     fresh_fleet.forget_authorizations()
+
+
+@given("the portal is down")
+def portal_is_down(portal_down: None) -> None:
+    """The portal is stopped by the fixture, and started again after it.
+
+    A machine answers from what it cached once the portal is away, which
+    is what the steps that follow ask about.
+
+    """
+
+
+@then(
+    parsers.re(
+        r'the authorization of "(?P<name>[^"]+)" is cached on "(?P<host>[\w.-]+)"'
+    )
+)
+def authorization_is_cached(name: str, host: str, deployed_fleet: Fleet) -> None:
+    """The machine kept the answer the portal gave for the user.
+
+    What is cached is the authorization, not the key: the entry holds the
+    groups of the user and what it may do with sudo, and sshd validates the
+    certificate on its own before PAM is asked.
+
+    """
+    machine = deployed_fleet.machine(host)
+    if not deployed_fleet.cached_authorization(machine, name):
+        listing = deployed_fleet.run_as_root(
+            machine, f"ls -l {AUTHORIZATION_CACHE}"
+        ).stdout
+        pytest.fail(
+            f"{host} holds no authorization for {name}: expected "
+            f"{authorization_entry(machine, name)}.\n{listing}",
+            pytrace=False,
+        )
+
+
+@when(
+    parsers.re(
+        r'the authorization of "(?P<name>[^"]+)" is removed from "(?P<host>[\w.-]+)"'
+    )
+)
+def authorization_is_removed(name: str, host: str, deployed_fleet: Fleet) -> None:
+    """Drop the entry, as the time to live of the cache would."""
+    deployed_fleet.forget_authorization(deployed_fleet.machine(host), name)
+
+
+@then("the hop cannot be made")
+def hop_cannot_be_made(connection: HopResult) -> None:
+    """The bastion could not vouch for the user.
+
+    ob-ssh mints a certificate through the portal for every hop, and
+    nothing there is cacheable: a backend whose authorization is cached
+    still cannot be reached while the portal is away. The backend did not
+    refuse anything, so this is not read as a refusal.
+
+    """
+    assert not connection.succeeded, connection.describe()
 
 
 @when(

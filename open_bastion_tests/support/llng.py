@@ -154,6 +154,20 @@ class Llng:
             "install", "-d", "-o", "www-data", "-g", "www-data", CONTAINER_SSH_DIR
         )
 
+    def stop(self) -> None:
+        """Stop the portal, keeping the configuration it holds.
+
+        What the machines cached is what a scenario asks about while it is
+        away: the container comes back as it was.
+
+        """
+        self._compose("stop", CONTAINER)
+
+    def start(self) -> None:
+        """Start the portal again, once :meth:`stop` has stopped it."""
+        self._compose("start", CONTAINER)
+        self._wait_for_portal()
+
     def down(self) -> None:
         self._compose("down", "-v")
 

@@ -86,7 +86,7 @@ def test_sudo_removed() -> None:
 
 
 @scenario(FEATURE, "A service account reach the bastion but can't sudo")
-def test_service_account_on_backends() -> None:
+def test_service_account_on_bastion() -> None:
     pass
 
 
@@ -102,4 +102,9 @@ def test_sudo_goes_through_the_portal() -> None:
 
 @scenario(FEATURE, "The backends only accept the bastion of the fleet")
 def test_backends_accept_only_the_bastion() -> None:
+    pass
+
+
+@scenario(FEATURE, "The cache keeps a user's access while the portal is down")
+def test_cache_while_portal_down() -> None:
     pass

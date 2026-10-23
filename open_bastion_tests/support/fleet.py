@@ -3,6 +3,7 @@
 from pathlib import Path
 
 import asyncio
+import hashlib
 import logging
 import subprocess
 import time
@@ -71,6 +72,20 @@ SSH_OPTIONS = [
 def data(*parts: str) -> Path:
     """Path to one of the test owned copies of the example files."""
     return DATA_DIR.joinpath(*parts)
+
+
+def authorization_entry(machine: Machine, user: str) -> Path:
+    """File where a machine keeps the authorization the portal gave a user.
+
+    The module caches one entry per user, server group and machine, named
+    after the first 16 bytes of a hash of the three (``src/auth_cache.c``,
+    ``hash_cache_key``). The server group is the role of the machine, as
+    the inventory declares it.
+
+    """
+    key = f"auth:{user}:{machine.type.value}:{machine.name}"
+    digest = hashlib.sha256(key.encode()).hexdigest()[:32]
+    return Path(AUTHORIZATION_CACHE) / f"{digest}.authcache"
 
 
 class Fleet:
@@ -220,6 +235,21 @@ class Fleet:
                 raise RuntimeError(
                     f"Failed to clear the cache of {machine.name}: {result.describe()}"
                 )
+
+    def cached_authorization(self, machine: Machine, user: str) -> bool:
+        """Whether the machine kept the answer the portal gave for a user."""
+        entry = authorization_entry(machine, user)
+        return self.run_as_root(machine, f"test -f {entry}").succeeded
+
+    def forget_authorization(self, machine: Machine, user: str) -> None:
+        """Drop one cached authorization, as its time to live would."""
+        entry = authorization_entry(machine, user)
+        result = self.run_as_root(machine, f"rm -f {entry}")
+        if not result.succeeded:
+            raise RuntimeError(
+                f"Failed to drop the authorization of {user} on {machine.name}: "
+                f"{result.describe()}"
+            )
 
     def run_as_root(self, machine: Machine, script: str) -> AgentResult:
         """Run a shell command as root in a guest, through its agent.

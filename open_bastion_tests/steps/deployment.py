@@ -37,6 +37,7 @@ SERVICE_KEYS_PATTERNS = (
 # what it does not answer
 SUDO_STACK_PATTERNS = (r"pam_openbastion\.so", r"pam_deny\.so")
 
+
 @then(parsers.re(r'the sudo stack of "(?P<name>[^"]+)" asks the portal'))
 def sudo_stack_asks_the_portal(name: str, deployed_fleet: Fleet) -> None:
     """Elevation on the host goes through the portal."""

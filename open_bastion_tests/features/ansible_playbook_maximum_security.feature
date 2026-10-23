@@ -107,3 +107,20 @@ Feature: Ansible playbook for maximum security
 
   Scenario: The backends only accept the bastion of the fleet
     Then the backends accept only the bastion "bastion-1"
+
+  Scenario: The cache keeps a user's access while the portal is down
+    Given user "rtyler" has signed its SSH public key
+    When user "rtyler" tries to connect to "bastion-1" through SSH
+    Then the result is success
+    And the authorization of "rtyler" is cached on "bastion-1"
+    When user "rtyler" hops from "bastion-1" to "backend-2" through SSH
+    Then the result is success
+    And the authorization of "rtyler" is cached on "backend-2"
+    When the portal is down
+    When user "rtyler" tries to connect to "bastion-1" through SSH
+    Then the result is success
+    When user "rtyler" hops from "bastion-1" to "backend-2" through SSH
+    Then the hop cannot be made
+    When the authorization of "rtyler" is removed from "bastion-1"
+    When user "rtyler" tries to connect to "bastion-1" through SSH
+    Then the result is fails

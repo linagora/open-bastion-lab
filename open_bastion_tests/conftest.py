@@ -258,6 +258,20 @@ def llng(request: pytest.FixtureRequest, llng_runtime: Llng) -> Llng:
     return llng_runtime
 
 
+@pytest.fixture
+def portal_down(llng: Llng) -> Iterator[None]:
+    """Stop the portal for the rest of the scenario, and bring it back.
+
+    What the machines cached is what the scenario asks about while it is
+    away. The container keeps its configuration, so the next scenario finds
+    the portal as the module left it.
+
+    """
+    llng.stop()
+    yield
+    llng.start()
+
+
 @pytest.fixture(scope="module")
 def configuration(request: pytest.FixtureRequest) -> str:
     """Name of the ob-builder configuration the module names.
