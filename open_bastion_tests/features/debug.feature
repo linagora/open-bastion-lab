@@ -9,7 +9,7 @@ Feature: Configured lab for debugging
     And the LLNG configuration is "lmConf-with-plugins-configured"
     And user "pshark" has copied its SSH public key to "bastion-1"
     And user "pshark" has copied its SSH public key to "backend-2"
-    And an administrator runs ob-builder to generate an ansible playbook with the "ob-builder-max-security" configuration
+    And the administrator generates the playbook with the "ob-builder-max-security" configuration
     And the administrator plays the generated playbook against the fleet
 
   Scenario: The lab is configured

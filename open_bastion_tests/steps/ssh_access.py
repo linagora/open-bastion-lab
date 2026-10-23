@@ -69,8 +69,7 @@ def llng_configuration_is(name: str, llng: Llng) -> None:
 
 @given(
     parsers.re(
-        r"an administrator runs ob-builder to generate an ansible playbook "
-        r'with the "(?P<name>[^"]+)" configuration'
+        r'the administrator generates the playbook with the "(?P<name>[^"]+)" configuration'
     )
 )
 def administrator_generates_playbook(

@@ -7,7 +7,7 @@ Feature: Ansible playbook for maximum security with hardening
   Background:
     Given the fleet "two-backends" is ready
     And the LLNG configuration is "lmConf-with-plugins-configured"
-    And an administrator runs ob-builder to generate an ansible playbook with the "ob-builder-max-security-with-hardening" configuration
+    And the administrator generates the playbook with the "ob-builder-max-security-with-hardening" configuration
     And the administrator plays the generated playbook against the fleet
 
   Scenario: A command left running is recorded and does not outlive the session
