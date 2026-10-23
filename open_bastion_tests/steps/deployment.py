@@ -16,22 +16,14 @@ import pytest
 
 from open_bastion_lab.model import Role
 
-from open_bastion_tests.support import guest_agent
 from open_bastion_tests.support.fleet import Fleet
 
 LOGGER = logging.getLogger(__name__)
 
 # What the setup scripts write, and what the scenarios read back
-SERVICE_KEYS_DROP_IN = "/etc/ssh/sshd_config.d/09-open-bastion-service-keys.conf"
 SUDO_STACK = "/etc/pam.d/sudo"
 ALLOWED_BASTIONS = "/etc/open-bastion/allowed_bastions"
 BASTION_ID = "/usr/bin/ob-bastion-id"
-
-# sshd serves the keys of the service accounts only with both of them
-SERVICE_KEYS_PATTERNS = (
-    r"^\s*AuthorizedKeysCommand\s+\S*ob-service-account-keys",
-    r"^\s*ExposeAuthInfo\s+yes",
-)
 
 # The sudo stack of a maximum security host asks the portal, and refuses
 # what it does not answer
