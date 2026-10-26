@@ -14,7 +14,11 @@ from open_bastion_tests.support.fleet import (
     authorization_entry,
 )
 from open_bastion_tests.support.llng import Llng, Session
-from open_bastion_tests.support.playbook import Administrator, NEXT_INVENTORY_FILE
+from open_bastion_tests.support.playbook import (
+    NEXT_INVENTORY_FILE,
+    Administrator,
+    Play,
+)
 from open_bastion_tests.support.ssh import (
     Connection,
     HopResult,
@@ -110,18 +114,54 @@ def administrator_plays_again(
     deployed_fleet: Fleet,
     user_factory: Callable[[str], User],
     portal_sessions: Callable[[str], Session | None],
-) -> None:
+) -> Play:
     """Play the tree again as an SSO user, for one machine of the fleet."""
     session = portal_sessions(name)
     if session is None:
         pytest.fail(f"{name} has no session on the portal, there is no token to mint")
-    administrator.play_playbook(
+    return administrator.play_playbook(
         deployed_fleet,
         session,
         as_user=user_factory(name),
         limit=host,
         source=NEXT_INVENTORY_FILE,
     )
+
+
+@when(
+    parsers.re(
+        r'the administrator plays the playbook again for "(?P<host>[\w.-]+)" '
+        r"as a service account"
+    ),
+    target_fixture="play",
+)
+def administrator_plays_as_service_account(
+    host: str,
+    administrator: Administrator,
+    deployed_fleet: Fleet,
+    portal_session: Session,
+) -> Play:
+    """Play the tree again as the account the inventory names."""
+    return administrator.play_playbook(
+        deployed_fleet, portal_session, limit=host, source=NEXT_INVENTORY_FILE
+    )
+
+
+@then("the play succeeds")
+def play_succeeds(play: Play) -> None:
+    assert play.succeeded, play.describe()
+
+
+@then(parsers.re(r'the play changed nothing on "(?P<host>[\w.-]+)"'))
+def play_changed_nothing(host: str, play: Play) -> None:
+    """The host was left as it was: the play could not become root there."""
+    counters = play.recap(host)
+    if counters.get("changed", 1) != 0:
+        pytest.fail(
+            f"The play changed {counters.get('changed', 'an unknown number of')} "
+            f"on {host}: {play.describe()}",
+            pytrace=False,
+        )
 
 
 @given(

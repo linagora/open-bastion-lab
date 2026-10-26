@@ -115,6 +115,11 @@ def test_second_playbook_by_an_sso_user() -> None:
     pass
 
 
+@scenario(FEATURE, "Non-SSO users can't play a second playbook")
+def test_second_playbook_by_a_service_account() -> None:
+    pass
+
+
 @scenario(FEATURE, "The bastion records what a user does on a backend")
 def test_session_recording() -> None:
     pass

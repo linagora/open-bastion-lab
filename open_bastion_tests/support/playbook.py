@@ -1,5 +1,6 @@
 """What an administrator does to the fleet: build and play a playbook."""
 
+from dataclasses import dataclass
 from pathlib import Path
 
 import json
@@ -54,6 +55,32 @@ def apt_repository_url() -> str:
             f"No URL in {sources.group('line').strip()!r}, read from {INVENTORY_FILE}"
         )
     return url.group(0).rstrip("/")
+
+
+@dataclass
+class Play:
+    """What a play did, as its recap reports it."""
+
+    log: Path
+    returncode: int
+
+    @property
+    def succeeded(self) -> bool:
+        return self.returncode == 0
+
+    def recap(self, host: str) -> dict[str, int]:
+        """Counters the play left for a host."""
+        text = self.log.read_text(errors="replace")
+        found = re.search(rf"^{re.escape(host)}\s*:\s*(?P<counters>.*)$", text, re.M)
+        if found is None:
+            return {}
+        return {
+            key: int(value)
+            for key, value in re.findall(r"(\w+)=(\d+)", found["counters"])
+        }
+
+    def describe(self) -> str:
+        return f"ansible-playbook returned {self.returncode}, see {self.log}"
 
 
 class Administrator:
@@ -112,12 +139,15 @@ class Administrator:
         as_user: User | None = None,
         limit: str | None = None,
         source: Path = INVENTORY_FILE,
-    ) -> None:
+    ) -> Play:
         """Install open-bastion on the fleet and enrol it against the portal.
 
         Given a user, the play runs as that SSO user, connecting with its
         certificate and minting a token at each sudo prompt: once deployed
         under maximum security, that is the way to configure a host again.
+
+        The caller reads the outcome: a play that fails is a scenario's
+        subject as much as one that succeeds.
 
         """
         known_hosts = self.work_dir / "known_hosts"
@@ -157,7 +187,8 @@ class Administrator:
             log=log,
         )
         if result.returncode != 0:
-            raise RuntimeError(f"Playing the playbook failed, see {log}")
+            LOGGER.info("The play failed, see %s", log)
+        return Play(log=log, returncode=result.returncode)
 
     def _token_command(self, session: Session) -> Path:
         """A command the controller runs at each sudo prompt to mint a token."""

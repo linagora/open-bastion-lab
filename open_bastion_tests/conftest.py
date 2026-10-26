@@ -332,7 +332,9 @@ def deployed_fleet(
     portal_session: Session,
 ) -> Fleet:
     """The fleet open-bastion is installed and enrolled on."""
-    administrator.play_playbook(fresh_fleet, portal_session)
+    play = administrator.play_playbook(fresh_fleet, portal_session)
+    if not play.succeeded:
+        raise RuntimeError(play.describe())
     return fresh_fleet
 
 

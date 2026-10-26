@@ -111,9 +111,14 @@ Feature: Ansible playbook for maximum security
   Scenario: SSO users can play a second playbook
     Given user "msmith" has signed its SSH public key
     When the administrator plays the playbook again as "msmith" for "backend-3"
-    Then the backend "backend-3" is enrolled
+    Then the play succeeds
+    And the backend "backend-3" is enrolled
     When user "msmith" hops from "bastion-1" to "backend-3" through SSH
     Then the result is success
+
+  Scenario: Non-SSO users can't play a second playbook
+    When the administrator plays the playbook again for "backend-2" as a service account
+    Then the play changed nothing on "backend-2"
 
   Scenario: A revoked certificate is refused once the list is refreshed
     Given user "msmith" has signed its SSH public key
