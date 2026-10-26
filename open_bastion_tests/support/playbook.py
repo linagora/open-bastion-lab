@@ -190,11 +190,21 @@ class Administrator:
         return Play(log=log, returncode=result.returncode)
 
     def _token_command(self, session: Session) -> Path:
-        """A command the controller runs at each sudo prompt to mint a token."""
+        """A command the controller runs at each sudo prompt to mint a token.
+
+        It logs in for each call, like the documented command does, so a
+        replay after the portal was recreated does not carry a dead session.
+
+        """
         script = self.work_dir / "token-cmd"
         script.write_text(
             "#!/bin/sh\n"
-            f"curl -sS -X POST -b {session.cookie} {PORTAL_URL}/pam | "
+            "set -e\n"
+            "if command -v llng >/dev/null 2>&1; then\n"
+            f"  exec llng --llng-url {PORTAL_URL} --user {session.user} "
+            f"--password {session.user} pam_token\n"
+            "fi\n"
+            f"curl -fsS -X POST -b {session.cookie} {PORTAL_URL}/pam | "
             "python3 -c 'import json, sys; print(json.load(sys.stdin)[\"token\"])'\n"
         )
         script.chmod(0o755)

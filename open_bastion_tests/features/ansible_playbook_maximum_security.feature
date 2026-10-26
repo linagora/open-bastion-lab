@@ -110,6 +110,10 @@ Feature: Ansible playbook for maximum security
 
   Scenario: SSO users can play a second playbook
     Given user "msmith" has signed its SSH public key
+    And the administrator set pam-access sudo rule to:
+      | bastion | $uid eq "msmith" |
+    And the portal workers reloaded the configuration
+    And the administrator drops the authorization cache of the fleet
     When the administrator plays the playbook again as "msmith" for "bastion-1"
     Then the play succeeds
 
@@ -120,6 +124,10 @@ Feature: Ansible playbook for maximum security
 
   Scenario: Playing the tree again as an SSO user changes nothing
     Given user "msmith" has signed its SSH public key
+    And the administrator set pam-access sudo rule to:
+      | bastion | $uid eq "msmith" |
+    And the portal workers reloaded the configuration
+    And the administrator drops the authorization cache of the fleet
     When the administrator plays the playbook again as "msmith" for "bastion-1"
     Then the play succeeds
     When the administrator plays the playbook again as "msmith" for "bastion-1"
