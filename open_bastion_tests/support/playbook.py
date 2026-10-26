@@ -60,9 +60,12 @@ class Play:
     def succeeded(self) -> bool:
         return self.returncode == 0
 
+    def text(self) -> str:
+        return self.log.read_text(errors="replace")
+
     def recap(self, host: str) -> dict[str, int]:
         """Counters the play left for a host."""
-        text = self.log.read_text(errors="replace")
+        text = self.text()
         found = re.search(rf"^{re.escape(host)}\s*:\s*(?P<counters>.*)$", text, re.M)
         if found is None:
             return {}

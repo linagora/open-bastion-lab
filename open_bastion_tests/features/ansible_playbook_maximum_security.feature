@@ -116,6 +116,7 @@ Feature: Ansible playbook for maximum security
   Scenario: Non-SSO users can't play a second playbook
     When the administrator plays the playbook again for "bastion-1" as a service account
     Then the play changed nothing on "bastion-1"
+    And the play warns that "bastion-1" keeps its SSO sudo
 
   Scenario: Playing the tree again as an SSO user changes nothing
     Given user "msmith" has signed its SSH public key
@@ -123,6 +124,7 @@ Feature: Ansible playbook for maximum security
     Then the play succeeds
     When the administrator plays the playbook again as "msmith" for "bastion-1"
     Then the play changed nothing on "bastion-1"
+    And the play warns that "bastion-1" keeps its SSO sudo
 
   Scenario: A revoked certificate is refused once the list is refreshed
     Given user "msmith" has signed its SSH public key

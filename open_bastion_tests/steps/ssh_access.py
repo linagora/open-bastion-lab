@@ -164,6 +164,19 @@ def play_succeeds(play: Play) -> None:
     assert play.succeeded, play.describe()
 
 
+@then(parsers.re(r'the play warns that "(?P<host>[\w.-]+)" keeps its SSO sudo'))
+def play_warns_locked(host: str, play: Play) -> None:
+    """The role said why it left the host alone, instead of doing nothing."""
+    if (
+        f"{host} runs maximum security: its sudo only takes SSO tokens"
+        not in play.text()
+    ):
+        pytest.fail(
+            f"The play left {host} alone without saying why: {play.describe()}",
+            pytrace=False,
+        )
+
+
 @then(parsers.re(r'the play changed nothing on "(?P<host>[\w.-]+)"'))
 def play_changed_nothing(host: str, play: Play) -> None:
     """The host was left as it was: the play could not become root there."""
