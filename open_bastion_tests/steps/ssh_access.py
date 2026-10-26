@@ -14,11 +14,7 @@ from open_bastion_tests.support.fleet import (
     authorization_entry,
 )
 from open_bastion_tests.support.llng import Llng, Session
-from open_bastion_tests.support.playbook import (
-    NEXT_INVENTORY_FILE,
-    Administrator,
-    Play,
-)
+from open_bastion_tests.support.playbook import Administrator, Play
 from open_bastion_tests.support.ssh import (
     Connection,
     HopResult,
@@ -105,7 +101,8 @@ def administrator_plays_playbook(deployed_fleet: Fleet) -> None:
     parsers.re(
         r'the administrator plays the playbook again as "(?P<name>[^"]+)" '
         r'for "(?P<host>[\w.-]+)"'
-    )
+    ),
+    target_fixture="play",
 )
 def administrator_plays_again(
     name: str,
@@ -124,7 +121,6 @@ def administrator_plays_again(
         session,
         as_user=user_factory(name),
         limit=host,
-        source=NEXT_INVENTORY_FILE,
     )
 
 
@@ -142,9 +138,7 @@ def administrator_plays_as_service_account(
     portal_session: Session,
 ) -> Play:
     """Play the tree again as the account the inventory names."""
-    return administrator.play_playbook(
-        deployed_fleet, portal_session, limit=host, source=NEXT_INVENTORY_FILE
-    )
+    return administrator.play_playbook(deployed_fleet, portal_session, limit=host)
 
 
 @then("the play succeeds")

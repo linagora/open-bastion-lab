@@ -9,13 +9,19 @@ from open_bastion_tests.support.playbook import Administrator
 
 FEATURE = "ansible_playbook_maximum_security_with_hardening.feature"
 
-FLEET = "three-backends"
+FLEET = "two-backends"
 CONFIGURATION = "ob-builder-max-security-with-hardening"
+ENROLLED = "all"
+INVENTORY = data("inventory-for-two-backends.yml")
 LLNG_CONFIG = data("llng/with-two-oidc-rp/lmConf-with-plugins-configured.json")
 
 pytestmark = [
     pytest.mark.parametrize("fleet", [FLEET], indirect=True),
     pytest.mark.parametrize("configuration", [CONFIGURATION], indirect=True),
+    pytest.mark.parametrize(
+        "inventory", [INVENTORY], indirect=True, ids=[INVENTORY.stem]
+    ),
+    pytest.mark.parametrize("enrolled", [ENROLLED], indirect=True),
     pytest.mark.parametrize(
         "llng", [LLNG_CONFIG], indirect=True, ids=[LLNG_CONFIG.stem]
     ),
@@ -24,7 +30,7 @@ pytestmark = [
 
 @pytest.fixture(autouse=True)
 def scenario_setup(
-    fresh_fleet: Fleet, llng: Llng, administrator: Administrator
+    fresh_fleet: Fleet, llng: Llng, administrator: Administrator, enrolled: str
 ) -> None:
     """Ask for everything the feature parametrizes, before every scenario."""
 

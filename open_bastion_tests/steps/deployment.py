@@ -18,7 +18,6 @@ from open_bastion_lab.model import Role
 
 from open_bastion_tests.support import guest_agent
 from open_bastion_tests.support.fleet import Fleet
-from open_bastion_tests.support.playbook import inventory_hosts
 
 LOGGER = logging.getLogger(__name__)
 
@@ -51,7 +50,9 @@ def sudo_stack_asks_the_portal(name: str, deployed_fleet: Fleet) -> None:
 
 
 @then(parsers.re(r'the backends accept only the bastion "(?P<bastion>[^"]+)"'))
-def backends_accept_only_the_bastion(bastion: str, deployed_fleet: Fleet) -> None:
+def backends_accept_only_the_bastion(
+    bastion: str, deployed_fleet: Fleet, enrolled: str
+) -> None:
     """Every backend lists the id of the bastion, and nothing else.
 
     The id is read on the bastion itself: it is the name the portal knows
@@ -68,8 +69,11 @@ def backends_accept_only_the_bastion(bastion: str, deployed_fleet: Fleet) -> Non
     identifier = result.stdout.strip().splitlines()[-1].strip()
     LOGGER.info("The id of %s is %s", bastion, identifier)
 
+    configured = None if enrolled == "all" else set(enrolled.split(","))
     for backend in deployed_fleet.machines():
-        if backend.type is not Role.BACKEND or backend.name not in inventory_hosts():
+        if backend.type is not Role.BACKEND:
+            continue
+        if configured is not None and backend.name not in configured:
             continue
         content = deployed_fleet.read_as_root(backend, ALLOWED_BASTIONS)
         accepted = [

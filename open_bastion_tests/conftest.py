@@ -283,11 +283,26 @@ def configuration(request: pytest.FixtureRequest) -> str:
 
 
 @pytest.fixture(scope="module")
+def inventory(request: pytest.FixtureRequest) -> Path:
+    """The inventory the play is given, as the module names it."""
+    return Path(_named(request, "inventory", "INVENTORY"))
+
+
+@pytest.fixture(scope="module")
+def enrolled(request: pytest.FixtureRequest) -> str:
+    """The hosts the first play configures, as --limit takes them."""
+    return str(_named(request, "enrolled", "ENROLLED"))
+
+
+@pytest.fixture(scope="module")
 def administrator(
-    module_dir: Path, maintainer_key: Path, configuration: str
+    module_dir: Path,
+    maintainer_key: Path,
+    configuration: str,
+    inventory: Path,
 ) -> Administrator:
-    """The administrator, building with the configuration of the module."""
-    return Administrator(module_dir, maintainer_key, configuration)
+    """The administrator, building and playing with the module's files."""
+    return Administrator(module_dir, maintainer_key, configuration, inventory)
 
 
 @pytest.fixture(scope="module")
@@ -330,9 +345,10 @@ def deployed_fleet(
     playbook: Path,
     fresh_fleet: Fleet,
     portal_session: Session,
+    enrolled: str,
 ) -> Fleet:
     """The fleet open-bastion is installed and enrolled on."""
-    play = administrator.play_playbook(fresh_fleet, portal_session)
+    play = administrator.play_playbook(fresh_fleet, portal_session, limit=enrolled)
     if not play.succeeded:
         raise RuntimeError(play.describe())
     return fresh_fleet

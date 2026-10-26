@@ -7,8 +7,6 @@ import json
 import logging
 import re
 
-import yaml
-
 from open_bastion_tests.support import command, public_key
 from open_bastion_tests.support.fleet import Fleet, data
 from open_bastion_tests.support.llng import PORTAL_URL, Session
@@ -16,8 +14,8 @@ from open_bastion_tests.support.ssh import User
 
 LOGGER = logging.getLogger(__name__)
 
-INVENTORY_FILE = data("inventory.yml")
-NEXT_INVENTORY_FILE = data("inventory-with-third-backend.yml")
+TWO_BACKENDS_INVENTORY = data("inventory-for-two-backends.yml")
+THREE_BACKENDS_INVENTORY = data("inventory-for-three-backends.yml")
 
 KEY_PATTERN = re.compile(r"^(?P<indent>[ \t]*)public_key_file:.*$", re.MULTILINE)
 INVENTORY_KEY_PATTERN = re.compile(
@@ -33,12 +31,6 @@ LOG = "ansible-playbook.log"
 BUILD_LOG = "ob-builder.log"
 
 
-def inventory_hosts(source: Path = INVENTORY_FILE) -> list[str]:
-    """Machines the play is asked to configure."""
-    groups = yaml.safe_load(source.read_text())["all"]["children"]
-    return [host for group in groups.values() for host in group.get("hosts", {})]
-
-
 def apt_repository_url() -> str:
     """Base URL of the repository the fleet installs packages from.
 
@@ -46,13 +38,13 @@ def apt_repository_url() -> str:
     of that repository looks at the address the machines are given.
 
     """
-    sources = APT_SOURCES_PATTERN.search(INVENTORY_FILE.read_text())
+    sources = APT_SOURCES_PATTERN.search(TWO_BACKENDS_INVENTORY.read_text())
     if sources is None:
-        raise RuntimeError(f"No ob_apt_sources_list_line in {INVENTORY_FILE}")
+        raise RuntimeError(f"No ob_apt_sources_list_line in {TWO_BACKENDS_INVENTORY}")
     url = APT_URL_PATTERN.search(sources.group("line"))
     if url is None:
         raise RuntimeError(
-            f"No URL in {sources.group('line').strip()!r}, read from {INVENTORY_FILE}"
+            f"No URL in {sources.group('line').strip()!r}, read from {TWO_BACKENDS_INVENTORY}"
         )
     return url.group(0).rstrip("/")
 
@@ -95,11 +87,13 @@ class Administrator:
     work_dir: Path
     key: Path
     configuration: str
+    inventory: Path
 
-    def __init__(self, work_dir: Path, key: Path, configuration: str):
+    def __init__(self, work_dir: Path, key: Path, configuration: str, inventory: Path):
         self.work_dir = work_dir
         self.key = key
         self.configuration = configuration
+        self.inventory = inventory
 
     def generate_playbook(self) -> Path:
         """Generate the playbook of the configuration it was given.
@@ -138,7 +132,6 @@ class Administrator:
         *,
         as_user: User | None = None,
         limit: str | None = None,
-        source: Path = INVENTORY_FILE,
     ) -> Play:
         """Install open-bastion on the fleet and enrol it against the portal.
 
@@ -166,12 +159,15 @@ class Administrator:
                         f" -o CertificateFile={as_user.certificate}"
                     ),
                     "ansible_become_token_cmd": str(self._token_command(session)),
+                    # Ignored by ob_sudo_sso, which mints the token per prompt;
+                    # set so that ansible asks the become plugin for one.
+                    "ansible_become_password": "ob-sso",
                 }
             )
         args = [
             command.which("ansible-playbook"),
             "-i",
-            str(self._inventory(source)),
+            str(self._inventory()),
             PLAYBOOK,
         ]
         if limit is not None:
@@ -217,15 +213,15 @@ class Administrator:
             raise RuntimeError(f"No public_key_file to set in {source}")
         return text
 
-    def _inventory(self, source: Path = INVENTORY_FILE) -> Path:
+    def _inventory(self) -> Path:
         """The inventory, with the key of the tests instead of the example one."""
         text, count = INVENTORY_KEY_PATTERN.subn(
             rf"\g<indent>ansible_ssh_private_key_file: {self.key}",
-            source.read_text(),
+            self.inventory.read_text(),
         )
         if count == 0:
-            raise RuntimeError(f"No ansible_ssh_private_key_file in {source}")
+            raise RuntimeError(f"No ansible_ssh_private_key_file in {self.inventory}")
 
-        path = self.work_dir / source.name
+        path = self.work_dir / self.inventory.name
         path.write_text(text)
         return path

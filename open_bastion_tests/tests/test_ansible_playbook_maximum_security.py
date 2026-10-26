@@ -14,11 +14,17 @@ FEATURE = "ansible_playbook_maximum_security.feature"
 # here as well as in the feature.
 FLEET = "three-backends"
 CONFIGURATION = "ob-builder-max-security"
+ENROLLED = "bastion-1,backend-1,backend-2"
+INVENTORY = data("inventory-for-three-backends.yml")
 LLNG_CONFIG = data("llng/with-two-oidc-rp/lmConf-with-plugins-configured.json")
 
 pytestmark = [
     pytest.mark.parametrize("fleet", [FLEET], indirect=True),
     pytest.mark.parametrize("configuration", [CONFIGURATION], indirect=True),
+    pytest.mark.parametrize(
+        "inventory", [INVENTORY], indirect=True, ids=[INVENTORY.stem]
+    ),
+    pytest.mark.parametrize("enrolled", [ENROLLED], indirect=True),
     pytest.mark.parametrize(
         "llng", [LLNG_CONFIG], indirect=True, ids=[LLNG_CONFIG.stem]
     ),
@@ -27,7 +33,7 @@ pytestmark = [
 
 @pytest.fixture(autouse=True)
 def scenario_setup(
-    fresh_fleet: Fleet, llng: Llng, administrator: Administrator
+    fresh_fleet: Fleet, llng: Llng, administrator: Administrator, enrolled: str
 ) -> None:
     """Ask for everything the feature parametrizes, before every scenario.
 
@@ -117,6 +123,11 @@ def test_second_playbook_by_an_sso_user() -> None:
 
 @scenario(FEATURE, "Non-SSO users can't play a second playbook")
 def test_second_playbook_by_a_service_account() -> None:
+    pass
+
+
+@scenario(FEATURE, "Playing the tree again as an SSO user changes nothing")
+def test_second_playbook_is_idempotent() -> None:
     pass
 
 
