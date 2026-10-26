@@ -92,9 +92,27 @@ def administrator_generates_playbook(
     assert playbook.is_file()
 
 
-@given("the administrator plays the generated playbook against the fleet")
-def administrator_plays_playbook(deployed_fleet: Fleet) -> None:
-    """The play is run by the fixture, once for the feature."""
+@given(
+    parsers.re(
+        r"the administrator plays the generated playbook against the fleet"
+        r"(?:, (?P<excluded>[\w.-]+) excluded)?"
+    )
+)
+def administrator_plays_playbook(
+    deployed_fleet: Fleet, enrolled: str, excluded: str | None = None
+) -> None:
+    """The play is run by the fixture, once for the feature.
+
+    A host the feature says is left out must be outside the limit the
+    fixture gives the play, or the two say different things.
+
+    """
+    if excluded is not None and excluded in enrolled.split(","):
+        pytest.fail(
+            f"The feature leaves {excluded} out, but the play is given "
+            f"--limit {enrolled}",
+            pytrace=False,
+        )
 
 
 @when(

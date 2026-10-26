@@ -13,7 +13,7 @@ Feature: Ansible playbook for maximum security
     And user "pshark" has copied its SSH public key to "bastion-1"
     And user "pshark" has copied its SSH public key to "backend-2"
     And the administrator generates the playbook with the "ob-builder-max-security" configuration
-    And the administrator plays the generated playbook against the fleet
+    And the administrator plays the generated playbook against the fleet, backend-3 excluded
 
   Scenario Outline: Users known to the portal reach the bastion
     Given user <name> has signed its SSH public key
