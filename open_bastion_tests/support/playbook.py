@@ -6,13 +6,17 @@ import json
 import logging
 import re
 
+import yaml
+
 from open_bastion_tests.support import command, public_key
 from open_bastion_tests.support.fleet import Fleet, data
-from open_bastion_tests.support.llng import Session
+from open_bastion_tests.support.llng import PORTAL_URL, Session
+from open_bastion_tests.support.ssh import User
 
 LOGGER = logging.getLogger(__name__)
 
 INVENTORY_FILE = data("inventory.yml")
+NEXT_INVENTORY_FILE = data("inventory-with-third-backend.yml")
 
 KEY_PATTERN = re.compile(r"^(?P<indent>[ \t]*)public_key_file:.*$", re.MULTILINE)
 INVENTORY_KEY_PATTERN = re.compile(
@@ -26,6 +30,12 @@ APT_URL_PATTERN = re.compile(r"https?://[^\s\"]+")
 PLAYBOOK = "site.yml"
 LOG = "ansible-playbook.log"
 BUILD_LOG = "ob-builder.log"
+
+
+def inventory_hosts(source: Path = INVENTORY_FILE) -> list[str]:
+    """Machines the play is asked to configure."""
+    groups = yaml.safe_load(source.read_text())["all"]["children"]
+    return [host for group in groups.values() for host in group.get("hosts", {})]
 
 
 def apt_repository_url() -> str:
@@ -94,29 +104,52 @@ class Administrator:
         LOGGER.info("Generated %s", playbook)
         return playbook
 
-    def play_playbook(self, fleet: Fleet, session: Session) -> None:
-        """Install open-bastion on the fleet and enrol it against the portal."""
+    def play_playbook(
+        self,
+        fleet: Fleet,
+        session: Session,
+        *,
+        as_user: User | None = None,
+        limit: str | None = None,
+        source: Path = INVENTORY_FILE,
+    ) -> None:
+        """Install open-bastion on the fleet and enrol it against the portal.
+
+        Given a user, the play runs as that SSO user, connecting with its
+        certificate and minting a token at each sudo prompt: once deployed
+        under maximum security, that is the way to configure a host again.
+
+        """
         known_hosts = self.work_dir / "known_hosts"
         known_hosts.touch()
         # Extra variables are given as JSON: a "name=value" one is split on
         # spaces by ansible, which mangles the options below.
-        extra = {
-            "ob_llng_cookie": session.cookie,
-            # The machines are recreated between runs, so their host keys are
-            # not the ones of the last time: the play keeps its own file, and
-            # never reads or writes the one of whoever runs the tests.
-            "ansible_ssh_common_args": "-o StrictHostKeyChecking=no"
-            f" -o UserKnownHostsFile={known_hosts}",
-        }
+        common = f"-o StrictHostKeyChecking=no -o UserKnownHostsFile={known_hosts}"
+        extra = {"ob_llng_cookie": session.cookie, "ansible_ssh_common_args": common}
+        if as_user is not None:
+            extra.update(
+                {
+                    "ansible_user": as_user.name,
+                    "ansible_ssh_private_key_file": str(as_user.key),
+                    "ansible_ssh_common_args": (
+                        f"{common} -o IdentitiesOnly=yes"
+                        f" -o CertificateFile={as_user.certificate}"
+                    ),
+                    "ansible_become_token_cmd": str(self._token_command(session)),
+                }
+            )
         args = [
             command.which("ansible-playbook"),
             "-i",
-            str(self._inventory()),
+            str(self._inventory(source)),
             PLAYBOOK,
-            "-e",
-            json.dumps(extra),
         ]
-        log = self.work_dir / LOG
+        if limit is not None:
+            args += ["--limit", limit]
+        args += ["-e", json.dumps(extra)]
+        log = self.work_dir / (
+            LOG if limit is None else f"ansible-playbook-{limit}.log"
+        )
         result = command.run(
             args,
             cwd=self.work_dir / "ansible",
@@ -125,6 +158,17 @@ class Administrator:
         )
         if result.returncode != 0:
             raise RuntimeError(f"Playing the playbook failed, see {log}")
+
+    def _token_command(self, session: Session) -> Path:
+        """A command the controller runs at each sudo prompt to mint a token."""
+        script = self.work_dir / "token-cmd"
+        script.write_text(
+            "#!/bin/sh\n"
+            f"curl -sS -X POST -b {session.cookie} {PORTAL_URL}/pam | "
+            "python3 -c 'import json, sys; print(json.load(sys.stdin)[\"token\"])'\n"
+        )
+        script.chmod(0o755)
+        return script
 
     def _config(self, source: Path) -> str:
         """The configuration to build with, holding the key of the tests.
@@ -142,15 +186,15 @@ class Administrator:
             raise RuntimeError(f"No public_key_file to set in {source}")
         return text
 
-    def _inventory(self) -> Path:
+    def _inventory(self, source: Path = INVENTORY_FILE) -> Path:
         """The inventory, with the key of the tests instead of the example one."""
         text, count = INVENTORY_KEY_PATTERN.subn(
             rf"\g<indent>ansible_ssh_private_key_file: {self.key}",
-            INVENTORY_FILE.read_text(),
+            source.read_text(),
         )
         if count == 0:
-            raise RuntimeError(f"No ansible_ssh_private_key_file in {INVENTORY_FILE}")
+            raise RuntimeError(f"No ansible_ssh_private_key_file in {source}")
 
-        path = self.work_dir / INVENTORY_FILE.name
+        path = self.work_dir / source.name
         path.write_text(text)
         return path

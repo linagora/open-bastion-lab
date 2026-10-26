@@ -9,7 +9,7 @@ from open_bastion_tests.support.playbook import Administrator
 
 FEATURE = "debug.feature"
 
-FLEET = "two-backends"
+FLEET = "three-backends"
 CONFIGURATION = "ob-builder-max-security"
 LLNG_CONFIG = data("llng/with-two-oidc-rp/lmConf-with-plugins-configured.json")
 

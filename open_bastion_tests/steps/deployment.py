@@ -16,11 +16,14 @@ import pytest
 
 from open_bastion_lab.model import Role
 
+from open_bastion_tests.support import guest_agent
 from open_bastion_tests.support.fleet import Fleet
+from open_bastion_tests.support.playbook import inventory_hosts
 
 LOGGER = logging.getLogger(__name__)
 
 # What the setup scripts write, and what the scenarios read back
+CONFIG = "/etc/open-bastion/openbastion.conf"
 SUDO_STACK = "/etc/pam.d/sudo"
 ALLOWED_BASTIONS = "/etc/open-bastion/allowed_bastions"
 BASTION_ID = "/usr/bin/ob-bastion-id"
@@ -66,7 +69,7 @@ def backends_accept_only_the_bastion(bastion: str, deployed_fleet: Fleet) -> Non
     LOGGER.info("The id of %s is %s", bastion, identifier)
 
     for backend in deployed_fleet.machines():
-        if backend.type is not Role.BACKEND:
+        if backend.type is not Role.BACKEND or backend.name not in inventory_hosts():
             continue
         content = deployed_fleet.read_as_root(backend, ALLOWED_BASTIONS)
         accepted = [
@@ -79,6 +82,30 @@ def backends_accept_only_the_bastion(bastion: str, deployed_fleet: Fleet) -> Non
                 pytrace=False,
             )
         LOGGER.info("%s accepts only %s", backend.name, identifier)
+
+
+@then(parsers.re(r'the backend "(?P<name>[^"]+)" is enrolled'))
+def backend_is_enrolled(name: str, deployed_fleet: Fleet) -> None:
+    """The host was set up, and knows the bastion of the fleet.
+
+    The allowlist it writes comes from the bastion, read by the play: a
+    host that holds it was configured by a play that could become root
+    there.
+
+    """
+    machine = deployed_fleet.machine(name)
+    if not guest_agent.exists(machine.name, CONFIG):
+        pytest.fail(f"{name} was not configured: it has no {CONFIG}", pytrace=False)
+    bastion = next(
+        machine for machine in deployed_fleet.machines() if machine.type is Role.BASTION
+    )
+    identifier = deployed_fleet.run_as_root(bastion, BASTION_ID).stdout.split()[-1]
+    accepted = deployed_fleet.read_as_root(machine, ALLOWED_BASTIONS).split()
+    if accepted != [identifier]:
+        pytest.fail(
+            f"{name} accepts {accepted}, not the id {identifier} of {bastion.name}",
+            pytrace=False,
+        )
 
 
 @then(parsers.re(r'no process of "(?P<name>[^"]+)" is left on "(?P<host>[\w.-]+)"'))

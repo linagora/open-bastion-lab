@@ -12,7 +12,7 @@ FEATURE = "ansible_playbook_maximum_security.feature"
 # What the Background of the feature names, and what its scenarios run
 # against. pytest needs them before the scenario starts, so they are given
 # here as well as in the feature.
-FLEET = "two-backends"
+FLEET = "three-backends"
 CONFIGURATION = "ob-builder-max-security"
 LLNG_CONFIG = data("llng/with-two-oidc-rp/lmConf-with-plugins-configured.json")
 
@@ -107,6 +107,11 @@ def test_backends_accept_only_the_bastion() -> None:
 
 @scenario(FEATURE, "A revoked certificate is refused once the list is refreshed")
 def test_revoked_certificate() -> None:
+    pass
+
+
+@scenario(FEATURE, "SSO users can play a second playbook")
+def test_second_playbook_by_an_sso_user() -> None:
     pass
 
 

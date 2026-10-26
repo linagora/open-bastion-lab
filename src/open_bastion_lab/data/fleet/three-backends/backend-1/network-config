@@ -1,0 +1,12 @@
+version: 1
+config:
+   - type: physical
+     name: ens1
+     mac_address: ""            # computed
+     subnets:
+        - type: static
+          address: ""           # computed
+          netmask: 255.255.255.0
+          gateway: 192.168.122.1
+          dns_nameservers:
+             - 192.168.122.1

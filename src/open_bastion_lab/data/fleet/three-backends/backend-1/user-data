@@ -1,0 +1,32 @@
+#cloud-config
+users:
+- name: maintainer
+  sudo: ALL=(ALL) NOPASSWD:ALL
+  groups: sudo
+  shell: /bin/bash
+  passwd: $6$NCYwCMbdTVjFJi5z$klKlJ64p7FF3GzaxUhid/MGN3dODGB1eKAZmzymDWGM3fDiqwBOjlALtcqMr.mnaInW41UIi1IKOdB/Zo/xGe.
+  lock_passwd: false
+  ssh_authorized_keys: []
+- name: pshark
+  shell: /bin/bash
+  passwd: $6$NCYwCMbdTVjFJi5z$klKlJ64p7FF3GzaxUhid/MGN3dODGB1eKAZmzymDWGM3fDiqwBOjlALtcqMr.mnaInW41UIi1IKOdB/Zo/xGe.
+  lock_passwd: false
+# The accounts of the fleet can log in with their password until open-bastion
+# is deployed: a user copies its key that way, and the deployment then takes
+# passwords away (00-open-bastion-bastion.conf wins over this drop-in).
+ssh_pwauth: true
+locale: C.UTF-8
+timezone: UTC
+package_update: true
+packages:
+- qemu-guest-agent
+- openssh-server
+runcmd:
+- systemctl enable --now qemu-guest-agent
+write_files:
+# The seed is only reachable over the network: without this, cloud-init
+# falls back to DHCP on every boot after the first one and never
+# restores the static configuration.
+- path: /etc/cloud/cloud.cfg.d/99-disable-network-config.cfg
+  content: |
+    network: {config: disabled}

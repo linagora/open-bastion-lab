@@ -1,0 +1,3 @@
+[hosts]
+bastion = ["bastion-1"]
+backend = ["backend-1", "backend-2", "backend-3"]

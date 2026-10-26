@@ -9,7 +9,7 @@ from open_bastion_tests.support.playbook import Administrator
 
 FEATURE = "ansible_playbook_maximum_security_with_hardening.feature"
 
-FLEET = "two-backends"
+FLEET = "three-backends"
 CONFIGURATION = "ob-builder-max-security-with-hardening"
 LLNG_CONFIG = data("llng/with-two-oidc-rp/lmConf-with-plugins-configured.json")
 

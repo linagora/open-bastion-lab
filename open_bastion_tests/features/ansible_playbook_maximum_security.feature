@@ -8,7 +8,7 @@ Feature: Ansible playbook for maximum security
   # pshark copies its key before the machines are configured, while it can
   # still log in with the trivial password the fleet gives its accounts.
   Background:
-    Given the fleet "two-backends" is ready
+    Given the fleet "three-backends" is ready
     And the LLNG configuration is "lmConf-with-plugins-configured"
     And user "pshark" has copied its SSH public key to "bastion-1"
     And user "pshark" has copied its SSH public key to "backend-2"
@@ -107,6 +107,13 @@ Feature: Ansible playbook for maximum security
 
   Scenario: The backends only accept the bastion of the fleet
     Then the backends accept only the bastion "bastion-1"
+
+  Scenario: SSO users can play a second playbook
+    Given user "msmith" has signed its SSH public key
+    When the administrator plays the playbook again as "msmith" for "backend-3"
+    Then the backend "backend-3" is enrolled
+    When user "msmith" hops from "bastion-1" to "backend-3" through SSH
+    Then the result is success
 
   Scenario: A revoked certificate is refused once the list is refreshed
     Given user "msmith" has signed its SSH public key

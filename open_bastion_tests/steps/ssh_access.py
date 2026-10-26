@@ -14,7 +14,7 @@ from open_bastion_tests.support.fleet import (
     authorization_entry,
 )
 from open_bastion_tests.support.llng import Llng, Session
-from open_bastion_tests.support.playbook import Administrator
+from open_bastion_tests.support.playbook import Administrator, NEXT_INVENTORY_FILE
 from open_bastion_tests.support.ssh import (
     Connection,
     HopResult,
@@ -95,6 +95,33 @@ def administrator_generates_playbook(
 @given("the administrator plays the generated playbook against the fleet")
 def administrator_plays_playbook(deployed_fleet: Fleet) -> None:
     """The play is run by the fixture, once for the feature."""
+
+
+@when(
+    parsers.re(
+        r'the administrator plays the playbook again as "(?P<name>[^"]+)" '
+        r'for "(?P<host>[\w.-]+)"'
+    )
+)
+def administrator_plays_again(
+    name: str,
+    host: str,
+    administrator: Administrator,
+    deployed_fleet: Fleet,
+    user_factory: Callable[[str], User],
+    portal_sessions: Callable[[str], Session | None],
+) -> None:
+    """Play the tree again as an SSO user, for one machine of the fleet."""
+    session = portal_sessions(name)
+    if session is None:
+        pytest.fail(f"{name} has no session on the portal, there is no token to mint")
+    administrator.play_playbook(
+        deployed_fleet,
+        session,
+        as_user=user_factory(name),
+        limit=host,
+        source=NEXT_INVENTORY_FILE,
+    )
 
 
 @given(

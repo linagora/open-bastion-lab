@@ -5,7 +5,7 @@ Feature: Configured lab for debugging
   #   pytest -m debug
 
   Background:
-    Given the fleet "two-backends" is ready
+    Given the fleet "three-backends" is ready
     And the LLNG configuration is "lmConf-with-plugins-configured"
     And user "pshark" has copied its SSH public key to "bastion-1"
     And user "pshark" has copied its SSH public key to "backend-2"
