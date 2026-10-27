@@ -53,14 +53,19 @@ to look at the machines during a run.
 ## What a run does
 
 Creating the fleet, deploying open-bastion on it and enrolling it take
-minutes, so a feature, one feature file and one test module, owns the result
-of all that:
+minutes, so a fleet is created once, restored at the start of each feature,
+and what a feature builds or deploys is kept for its scenarios:
 
 |Scope   |Fixture                                            |Work                                                                                               |
 |--------|---------------------------------------------------|---------------------------------------------------------------------------------------------------|
-|session |`maintainer_key`, `fleet`                          |generate the key, create the machines, wait for `cloud-init`, snapshot them, delete them at the end|
-|feature |`fresh_fleet`, `llng`, `playbook`, `deployed_fleet`|restore the snapshot, import the LLNG configuration, build the playbook, play it                   |
-|scenario|`user_factory`, `user_ssh_config`, `scenario_dir`  |sign a key, open a session, keep what was tried                                                    |
+|session |`maintainer_key`, `labs`, `llng`                   |generate the key, create the machines of each fleet a feature asks for, wait for `cloud-init`, snapshot them, delete them at the end; run the portal|
+|feature |`module_dir`, `administrator`, `deployment`        |restore the fleet, import the LLNG configuration, build the artefact, play it or run the installers|
+|scenario|`fleet`, `playbook`, `user_factory`, `user_ssh_config`, `scenario_dir`|name the machines and the configuration, sign a key, open a session, keep what was tried|
+
+A feature says what it runs — which fleet, which portal configuration, which
+ob-builder artefact — in its own text, and its steps do it: `fleet` and
+`playbook` are what the first steps of a Background give the ones after
+them, not fixtures a module declares.
 
 Bringing the fleet up and reverting it are `ob-lab snapshot` and `ob-lab
 restore` on the command line too.
@@ -78,10 +83,10 @@ directory is **removed when the run passes and kept when it fails**:
   test_ansible_playbook_maximum_security/   one directory per feature
     ob-builder-max-security.yml      configuration handed to ob-builder
     ob-builder.log
-    inventory.yml                    inventory handed to ansible-playbook
+    inventory-for-three-backends.yml inventory handed to ansible-playbook
     ansible/site.yml                 generated playbook
     ansible-playbook.log
-    test_bastion_access-dwho-success-two-backends-lmConf-with-plugins-configured/
+    test_bastion_access-dwho-success/
       ssh_config                     the copy, pointing at the keys below
       llng/sign-dwho.json            answer of the portal to /ssh/sign
       ssh/.ssh/id_dwho               key pair, and its certificate next to it

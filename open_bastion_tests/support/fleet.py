@@ -278,3 +278,39 @@ class Fleet:
         status = asyncio.run(run(command, self.config, snapshot))
         if status != 0:
             raise RuntimeError(f"ob-lab {command} failed on fleet {self.name}")
+
+
+class Labs:
+    """The fleets the features name, created once and given back pristine.
+
+    A feature names its fleet in its Background: the machines are created the
+    first time a feature asks for that fleet, snapshotted once cloud-init has
+    settled, and every feature that follows starts its machines from that
+    snapshot. What a feature leaves on them does not reach the next one.
+
+    """
+
+    def __init__(self, key: Path):
+        self.key = key
+        self.fleets: dict[str, Fleet] = {}
+        self.restored: set[tuple[str, str]] = set()
+
+    def ready(self, name: str, *, feature: str) -> Fleet:
+        """The fleet a feature names, restored for it the first time it asks."""
+        fleet = self.fleets.get(name)
+        if fleet is None:
+            fleet = Fleet(name, self.key)
+            existing = sorted(machine.name for machine in fleet.existing())
+            if existing:
+                raise RuntimeError(
+                    f"Machines {', '.join(existing)} already exist: free the lab "
+                    f"with `ob-lab -f {name} delete` before running the tests"
+                )
+            fleet.start()
+            fleet.wait_for_cloud_init()
+            fleet.snapshot()
+            self.fleets[name] = fleet
+        if (name, feature) not in self.restored:
+            fleet.restore()
+            self.restored.add((name, feature))
+        return fleet

@@ -1,12 +1,15 @@
 """Fixtures of the open-bastion functional tests.
 
-The tests take the lab over: they create the fleet, snapshot it, and delete
-it at the end. Bringing a fleet up and deploying open-bastion on it takes
-minutes, so a module, one feature, owns a fleet in the state its first step
-describes: the snapshot is restored once for the module and the playbook is
-built and played once. What the scenarios of a module then do to the
-machines, signing a key and opening a session, is cheap and does not decide
-what the next scenario sees.
+The tests take the lab over: they create the fleets, snapshot them, and
+delete them at the end. Bringing a fleet up and deploying open-bastion on it
+takes minutes, so a fleet is created once, restored at the start of each
+feature, and what a feature builds or deploys is kept for its scenarios:
+the Background runs again before each of them. What the scenarios then do to
+the machines, signing a key and opening a session, is cheap and does not
+decide what the next scenario sees.
+
+A feature says what it runs — which fleet, which portal configuration, which
+ob-builder artefact — in its own text, and the steps act on what it says.
 
 What a failing scenario produced is left in a working directory whose path is
 printed in the header of the run, and which is kept when the run fails. The
@@ -27,7 +30,7 @@ import urllib.error
 import urllib.request
 
 from open_bastion_tests.support import command
-from open_bastion_tests.support.fleet import Fleet, data
+from open_bastion_tests.support.fleet import Fleet, Labs, data
 from open_bastion_tests.support.llng import ADMIN_USER, Llng, Session
 from open_bastion_tests.support.deployment import Administrator, apt_repository_url
 from open_bastion_tests.support.ssh import ServiceAccount, User
@@ -42,18 +45,6 @@ LOGGER = logging.getLogger(__name__)
 
 WORK_DIR_KEY = pytest.StashKey[Path]()
 KEPT_LAB_KEY = pytest.StashKey[list[str]]()
-
-
-def _named(request: pytest.FixtureRequest, fixture: str, attribute: str) -> Path | str:
-    """Value a test module gave to a fixture, or why it did not."""
-    value = getattr(request, "param", None)
-    if value is None:
-        pytest.fail(
-            f"{request.module.__name__} does not name its {fixture}: add\n"
-            f'  pytest.mark.parametrize("{fixture}", [{attribute}], indirect=True)',
-            pytrace=False,
-        )
-    return value
 
 
 def _slug(name: str) -> str:
@@ -179,50 +170,26 @@ def maintainer_key(work_dir: Path) -> Path:
 
 
 @pytest.fixture(scope="session")
-def fleet(
+def labs(
     request: pytest.FixtureRequest, maintainer_key: Path, packages_server: None
-) -> Iterator[Fleet]:
-    """The machines the scenarios run against, deleted at the end.
+) -> Iterator[Labs]:
+    """The fleets the features name, freed at the end of the run.
 
-    The module that asks for it names the fleet, by indirect
-    parametrization, and the Background of its feature tells the same
-    name. A run that failed leaves the machines up for inspection. The
-    package server is asked for first: it is what the deployment needs and
-    the only prerequisite that costs nothing to check.
+    The package server is asked for first: it is what the deployment needs
+    and the only prerequisite that costs nothing to check.
 
     """
-    name = _named(request, "fleet", "FLEET")
-    fleet = Fleet(str(name), maintainer_key)
-    existing = sorted(machine.name for machine in fleet.existing())
-    if existing:
-        pytest.fail(
-            f"Machines {', '.join(existing)} already exist: free the lab with "
-            f"`ob-lab -f {fleet.name} delete` before running the tests",
-            pytrace=False,
-        )
-
-    try:
-        fleet.start()
-        fleet.wait_for_cloud_init()
-        fleet.snapshot()
-        yield fleet
-    finally:
+    labs = Labs(maintainer_key)
+    yield labs
+    for name, fleet in labs.fleets.items():
         if request.session.testsfailed:
-            _keep_lab(request, f"ob-lab -f {fleet.name} delete")
+            _keep_lab(request, f"ob-lab -f {name} delete")
         else:
             fleet.delete()
 
 
-@pytest.fixture(scope="module")
-def fresh_fleet(fleet: Fleet) -> Fleet:
-    """The fleet as it was when the session snapshotted it. All
-    machines started."""
-    fleet.restore()
-    return fleet
-
-
 @pytest.fixture(scope="session")
-def llng_runtime(request: pytest.FixtureRequest, work_dir: Path) -> Iterator[Llng]:
+def llng(request: pytest.FixtureRequest, work_dir: Path) -> Iterator[Llng]:
     """The portal, running in its own compose project for the whole session.
 
     A run that failed leaves it up for inspection.
@@ -247,17 +214,6 @@ def llng_runtime(request: pytest.FixtureRequest, work_dir: Path) -> Iterator[Lln
         llng.down()
 
 
-@pytest.fixture(scope="module")
-def llng(request: pytest.FixtureRequest, llng_runtime: Llng) -> Llng:
-    """The portal configured with the configuration the module names.
-
-    The Background of the feature tells the same name.
-
-    """
-    llng_runtime.restore(Path(_named(request, "llng", "LLNG_CONFIG")))
-    return llng_runtime
-
-
 @pytest.fixture
 def portal_down(llng: Llng) -> Iterator[None]:
     """Stop the portal for the rest of the scenario, and bring it back.
@@ -273,49 +229,15 @@ def portal_down(llng: Llng) -> Iterator[None]:
 
 
 @pytest.fixture(scope="module")
-def configuration(request: pytest.FixtureRequest) -> str:
-    """Name of the ob-builder configuration the module names.
+def administrator(module_dir: Path, maintainer_key: Path) -> Administrator:
+    """The administrator of a feature, holding what it built and played.
 
-    The Background of the feature tells the same name.
-
-    """
-    return str(_named(request, "configuration", "CONFIGURATION"))
-
-
-@pytest.fixture(scope="module")
-def inventory(request: pytest.FixtureRequest) -> Path:
-    """The inventory the play is given, as the module names it."""
-    return Path(_named(request, "inventory", "INVENTORY"))
-
-
-@pytest.fixture(scope="module")
-def enrolled(request: pytest.FixtureRequest) -> str:
-    """The hosts the first play configures, as --limit takes them."""
-    return str(_named(request, "enrolled", "ENROLLED"))
-
-
-@pytest.fixture(scope="module")
-def administrator(
-    module_dir: Path,
-    maintainer_key: Path,
-    configuration: str,
-    inventory: Path,
-) -> Administrator:
-    """The administrator, building and playing with the module's files."""
-    return Administrator(module_dir, maintainer_key, configuration, inventory)
-
-
-@pytest.fixture(scope="module")
-def playbook(administrator: Administrator, llng: Llng) -> Path:
-    """The playbook of the default configuration, built once for the module.
-
-    ob-builder reads the SSO metadata, the SSH CA key and the revocation
-    list from the portal while building, so the portal runs its
-    configuration first. The dependency is stated here rather than left to
-    the order the Background of the feature happens to use.
+    It decides nothing: the steps name the configuration and the fleet, and
+    the artefacts are built once for the feature because the Background of
+    a feature runs again before each of its scenarios.
 
     """
-    return administrator.generate_playbook()
+    return Administrator(module_dir, maintainer_key)
 
 
 @pytest.fixture(scope="module")
@@ -340,21 +262,6 @@ def portal_session(llng: Llng) -> Session:
 
 
 @pytest.fixture(scope="module")
-def deployed_fleet(
-    administrator: Administrator,
-    playbook: Path,
-    fresh_fleet: Fleet,
-    portal_session: Session,
-    enrolled: str,
-) -> Fleet:
-    """The fleet open-bastion is installed and enrolled on."""
-    play = administrator.play_playbook(fresh_fleet, portal_session, limit=enrolled)
-    if not play.succeeded:
-        raise RuntimeError(play.describe())
-    return fresh_fleet
-
-
-@pytest.fixture(scope="module")
 def local_user_home(module_dir: Path) -> Path:
     """Where the keys of the accounts the portal does not know live.
 
@@ -369,8 +276,8 @@ def local_user_home(module_dir: Path) -> Path:
 
 @pytest.fixture(scope="module")
 def copied_public_keys(
-    fresh_fleet: Fleet, local_user_home: Path
-) -> Callable[[str, str], User]:
+    local_user_home: Path,
+) -> Callable[[str, str, Fleet], User]:
     """Copy the key of a local account to a machine, once per feature.
 
     The copy happens while the machines still accept the password of their
@@ -380,12 +287,12 @@ def copied_public_keys(
     """
     copied: dict[tuple[str, str], User] = {}
 
-    def copy(account: str, host: str) -> User:
+    def copy(account: str, host: str, fleet: Fleet) -> User:
         key = (account, host)
         if key not in copied:
             user = User(name=account, home=local_user_home)
             user.ensure_key()
-            fresh_fleet.copy_public_key(fresh_fleet.machine(host), account, user.key)
+            fleet.copy_public_key(fleet.machine(host), account, user.key)
             copied[key] = user
         return copied[key]
 

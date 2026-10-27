@@ -1,9 +1,12 @@
-"""Steps reading what a deployment left behind, as root.
+"""Steps of the deployment, and what it left behind.
 
-A fleet in maximum security has no local account left that can elevate, so
-these checks do not go through SSH: they ask the QEMU guest agent of the
-machines, which runs as root before PAM and sshd. See
-:mod:`open_bastion_tests.support.guest_agent`.
+The self-extracting installers are run step by step, as the documentation of
+the shell deployment has it: each step does one thing and keeps what it did,
+so the Background of the feature can run again before every scenario.
+
+The checks read the machines as root: a fleet in maximum security has no
+local account left that can elevate, so they ask the QEMU guest agent, which
+runs before PAM and sshd. See :mod:`open_bastion_tests.support.guest_agent`.
 
 """
 
@@ -17,8 +20,10 @@ import pytest
 from open_bastion_lab.model import Role
 
 from open_bastion_tests.support import guest_agent
+from open_bastion_tests.support.deployment import Administrator
 from open_bastion_tests.support.fleet import Fleet
 from open_bastion_tests.support.installer import InstallerBasedDeployment
+from open_bastion_tests.support.llng import Llng, Session
 
 LOGGER = logging.getLogger(__name__)
 
@@ -40,22 +45,10 @@ SUDO_STACK_PATTERNS = (r"pam_openbastion\.so", r"pam_deny\.so")
     )
 )
 def administrator_generates_the_bastion_installer(
-    name: str, deployment: InstallerBasedDeployment
+    name: str, administrator: Administrator, deployment: InstallerBasedDeployment
 ) -> None:
-    """ob-builder is run by the fixture, for the bastion first.
-
-    Naming the configuration in the feature says which deployment the
-    scenarios describe, and this is where that name meets the one the
-    administrator builds with.
-
-    """
-    configuration = deployment.administrator.configuration
-    if configuration != name:
-        pytest.fail(
-            f"The feature names the configuration {name}, but ob-builder "
-            f"builds with {configuration}"
-        )
-    installer = deployment.build_bastion_installer()
+    """ob-builder writes the bastion's artefact, once for the feature."""
+    installer = deployment.build_bastion_installer(administrator, name)
     LOGGER.info("The bastion installer of %s is %s", name, installer)
 
 
@@ -66,7 +59,10 @@ def administrator_generates_the_bastion_installer(
     )
 )
 def administrator_generates_the_backend_installer(
-    host: str, deployment: InstallerBasedDeployment
+    host: str,
+    administrator: Administrator,
+    fleet: Fleet,
+    deployment: InstallerBasedDeployment,
 ) -> None:
     """The backends allow the id the bastion printed, and only that id.
 
@@ -74,7 +70,7 @@ def administrator_generates_the_backend_installer(
     after the bastion is enrolled.
 
     """
-    installer = deployment.build_backend_installer(host)
+    installer = deployment.build_backend_installer(administrator, fleet, host)
     allowed = deployment.allowed_bastions(Role.BACKEND)
     if allowed != deployment.identifier:
         pytest.fail(
@@ -87,7 +83,7 @@ def administrator_generates_the_backend_installer(
 
 @given(parsers.re(r'the administrator runs the installer on "(?P<host>[^"]+)"'))
 def administrator_runs_the_installer(
-    host: str, deployment: InstallerBasedDeployment
+    host: str, fleet: Fleet, deployment: InstallerBasedDeployment
 ) -> None:
     """The installer is copied to the host and started, as root.
 
@@ -95,31 +91,36 @@ def administrator_runs_the_installer(
     it publishes is approved by the next step.
 
     """
-    deployment.start(host)
+    deployment.start(fleet, host)
 
 
 @given(parsers.re(r'the administrator approves the enrolment of "(?P<host>[^"]+)"'))
 def administrator_approves_the_enrolment(
-    host: str, deployment: InstallerBasedDeployment
+    host: str,
+    llng: Llng,
+    portal_session: Session,
+    deployment: InstallerBasedDeployment,
 ) -> None:
     """The device code the host published is approved on the portal."""
-    code = deployment.approve(host)
+    code = deployment.approve(llng, portal_session, host)
     LOGGER.info("The device code %s of %s was approved", code, host)
 
 
 @given(parsers.re(r'the installer of "(?P<host>[^"]+)" succeeded'))
-def installer_succeeded(host: str, deployment: InstallerBasedDeployment) -> None:
+def installer_succeeded(
+    host: str, fleet: Fleet, deployment: InstallerBasedDeployment
+) -> None:
     """The installer finished, and the host is configured."""
-    installation = deployment.finish(host)
+    installation = deployment.finish(fleet, host)
     if not installation.succeeded:
         pytest.fail(installation.describe(), pytrace=False)
 
 
 @then(parsers.re(r'the sudo stack of "(?P<name>[^"]+)" asks the portal'))
-def sudo_stack_asks_the_portal(name: str, deployed_fleet: Fleet) -> None:
+def sudo_stack_asks_the_portal(name: str, fleet: Fleet) -> None:
     """Elevation on the host goes through the portal."""
-    machine = deployed_fleet.machine(name)
-    content = deployed_fleet.read_as_root(machine, SUDO_STACK)
+    machine = fleet.machine(name)
+    content = fleet.read_as_root(machine, SUDO_STACK)
     missing = [
         pattern for pattern in SUDO_STACK_PATTERNS if not _matches(content, pattern)
     ]
@@ -133,17 +134,16 @@ def sudo_stack_asks_the_portal(name: str, deployed_fleet: Fleet) -> None:
 
 
 @then(parsers.re(r'the backends accept only the bastion "(?P<bastion>[^"]+)"'))
-def backends_accept_only_the_bastion(
-    bastion: str, deployed_fleet: Fleet, enrolled: str
-) -> None:
-    """Every backend lists the id of the bastion, and nothing else.
+def backends_accept_only_the_bastion(bastion: str, fleet: Fleet) -> None:
+    """Every configured backend lists the id of the bastion, and nothing else.
 
     The id is read on the bastion itself: it is the name the portal knows
-    the bastion by, and what the backends check a hop against.
+    the bastion by, and what the backends check a hop against. A backend the
+    deployment did not configure has no list to read, and is left alone.
 
     """
-    machine = deployed_fleet.machine(bastion)
-    result = deployed_fleet.run_as_root(machine, BASTION_ID)
+    machine = fleet.machine(bastion)
+    result = fleet.run_as_root(machine, BASTION_ID)
     if not result.succeeded or not result.stdout.strip():
         pytest.fail(
             f"{BASTION_ID} could not be read on {bastion}: {result.describe()}",
@@ -152,13 +152,14 @@ def backends_accept_only_the_bastion(
     identifier = result.stdout.strip().splitlines()[-1].strip()
     LOGGER.info("The id of %s is %s", bastion, identifier)
 
-    configured = None if enrolled == "all" else set(enrolled.split(","))
-    for backend in deployed_fleet.machines():
+    checked = 0
+    for backend in fleet.machines():
         if backend.type is not Role.BACKEND:
             continue
-        if configured is not None and backend.name not in configured:
+        if not guest_agent.exists(backend.name, ALLOWED_BASTIONS):
             continue
-        content = deployed_fleet.read_as_root(backend, ALLOWED_BASTIONS)
+        checked += 1
+        content = fleet.read_as_root(backend, ALLOWED_BASTIONS)
         accepted = [
             item.strip() for item in re.split(r"[,\s]+", content) if item.strip()
         ]
@@ -169,10 +170,16 @@ def backends_accept_only_the_bastion(
                 pytrace=False,
             )
         LOGGER.info("%s accepts only %s", backend.name, identifier)
+    if checked == 0:
+        pytest.fail(
+            f"No backend of the fleet lists the bastions it accepts "
+            f"({ALLOWED_BASTIONS}): were they deployed?",
+            pytrace=False,
+        )
 
 
 @then(parsers.re(r'the backend "(?P<name>[^"]+)" is enrolled'))
-def backend_is_enrolled(name: str, deployed_fleet: Fleet) -> None:
+def backend_is_enrolled(name: str, fleet: Fleet) -> None:
     """The host was set up, and knows the bastion of the fleet.
 
     The allowlist it writes comes from the bastion, read by the play: a
@@ -180,14 +187,14 @@ def backend_is_enrolled(name: str, deployed_fleet: Fleet) -> None:
     there.
 
     """
-    machine = deployed_fleet.machine(name)
+    machine = fleet.machine(name)
     if not guest_agent.exists(machine.name, CONFIG):
         pytest.fail(f"{name} was not configured: it has no {CONFIG}", pytrace=False)
     bastion = next(
-        machine for machine in deployed_fleet.machines() if machine.type is Role.BASTION
+        machine for machine in fleet.machines() if machine.type is Role.BASTION
     )
-    identifier = deployed_fleet.run_as_root(bastion, BASTION_ID).stdout.split()[-1]
-    accepted = deployed_fleet.read_as_root(machine, ALLOWED_BASTIONS).split()
+    identifier = fleet.run_as_root(bastion, BASTION_ID).stdout.split()[-1]
+    accepted = fleet.read_as_root(machine, ALLOWED_BASTIONS).split()
     if accepted != [identifier]:
         pytest.fail(
             f"{name} accepts {accepted}, not the id {identifier} of {bastion.name}",
@@ -196,15 +203,15 @@ def backend_is_enrolled(name: str, deployed_fleet: Fleet) -> None:
 
 
 @then(parsers.re(r'no process of "(?P<name>[^"]+)" is left on "(?P<host>[\w.-]+)"'))
-def no_process_is_left(name: str, host: str, deployed_fleet: Fleet) -> None:
+def no_process_is_left(name: str, host: str, fleet: Fleet) -> None:
     """The machine took down what the closed session left running.
 
     The hardening turns on logind's own cleanup of a session's processes, so
     a command started with nohup does not outlive the session.
 
     """
-    machine = deployed_fleet.machine(host)
-    result = deployed_fleet.run_as_root(
+    machine = fleet.machine(host)
+    result = fleet.run_as_root(
         machine,
         f"for i in $(seq 1 20); do pgrep -u {name} >/dev/null || exit 0; sleep 1; done;"
         f" pgrep -a -u {name}; exit 1",

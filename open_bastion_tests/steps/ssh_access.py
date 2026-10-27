@@ -11,10 +11,16 @@ from open_bastion_lab.model import Role
 from open_bastion_tests.support.fleet import (
     AUTHORIZATION_CACHE,
     Fleet,
+    Labs,
     authorization_entry,
 )
 from open_bastion_tests.support.llng import Llng, Session
-from open_bastion_tests.support.deployment import Administrator, Play
+from open_bastion_tests.support.deployment import (
+    Administrator,
+    Play,
+    inventory_for,
+    llng_configuration,
+)
 from open_bastion_tests.support.ssh import (
     Connection,
     HopResult,
@@ -29,67 +35,56 @@ CA_KEY = "/etc/ssh/open-bastion_ca.pub"
 SESSIONS = "/var/lib/open-bastion/sessions"
 
 
-@given(parsers.re(r'the fleet "(?P<name>[^"]+)" is ready'))
-def fleet_is_ready(name: str, fresh_fleet: Fleet) -> None:
-    """The machines are created, booted, and given back to the feature.
+@given(parsers.re(r'the fleet "(?P<name>[^"]+)" is ready'), target_fixture="fleet")
+def fleet_is_ready(name: str, labs: Labs, request: pytest.FixtureRequest) -> Fleet:
+    """The machines the feature names, restored for it.
 
-    Naming the fleet in the feature says which one the scenarios run
-    against; the module of the feature says the same, because pytest needs
-    it before the scenario starts, and this step is where the two meet.
-
-    The SSH authorization cache is cleared on each machine of the
-    fleet.
+    The fleet a feature runs against is the one its Background names: it is
+    created the first time a feature asks for it, and every feature starts
+    its machines from the snapshot taken then. The authorization cache is
+    cleared, so what an earlier feature cached is not what a scenario reads.
 
     """
-    if fresh_fleet.name != name:
-        pytest.fail(
-            f"The feature names the fleet {name}, but the tests run against "
-            f"{fresh_fleet.name}"
-        )
-    fresh_fleet.forget_authorizations()
+    try:
+        fleet = labs.ready(name, feature=request.module.__name__)
+    except RuntimeError as error:
+        pytest.fail(str(error), pytrace=False)
+    fleet.forget_authorizations()
+    return fleet
 
 
 @given(parsers.re(r'the LLNG configuration is "(?P<name>[^"]+)"'))
 def llng_configuration_is(name: str, llng: Llng) -> None:
-    """The portal runs the configuration the feature names, whatever ran before.
+    """The portal runs the configuration the feature names.
 
-    The module of the feature gives the fixture the file, the feature names
-    it, and this is where the two meet. A scenario that changes the
-    configuration does not depend on the order it runs in: the file is
-    imported again when an earlier scenario changed it.
+    A scenario may change the configuration, and a feature does not decide
+    the order its scenarios run in: the file is imported again once the
+    portal drifted.
 
     """
-    if llng.configuration != name:
-        pytest.fail(
-            f"The feature names the configuration {name}, but the portal runs "
-            f"{llng.configuration}"
-        )
-    llng.ensure_configuration()
+    configuration = llng_configuration(name)
+    if llng.config_file is None or llng.configuration != name:
+        llng.restore(configuration)
+    else:
+        llng.ensure_configuration()
 
 
 @given(
     parsers.re(
         r'the administrator generates the playbook with the "(?P<name>[^"]+)" configuration'
-    )
+    ),
+    target_fixture="playbook",
 )
-def administrator_generates_playbook(
-    name: str, playbook: Path, administrator: Administrator
-) -> None:
-    """ob-builder is run by the fixture, once for the feature.
+def administrator_generates_playbook(name: str, administrator: Administrator) -> Path:
+    """ob-builder writes the tree of the configuration, once for the feature.
 
-    Naming the configuration in the feature says which deployment the
-    scenarios describe, and this is where that name meets the one the
-    administrator builds with. ob-builder reads the SSO metadata, the SSH
-    CA key and the revocation list from the portal while building, so the
-    portal has to be up.
+    ob-builder reads the SSO metadata, the SSH CA key and the revocation
+    list from the portal while building, so the portal has to be up.
 
     """
-    if administrator.configuration != name:
-        pytest.fail(
-            f"The feature names the configuration {name}, but ob-builder "
-            f"builds with {administrator.configuration}"
-        )
+    playbook = administrator.generate_playbook(name)
     assert playbook.is_file()
+    return playbook
 
 
 @given(
@@ -99,20 +94,24 @@ def administrator_generates_playbook(
     )
 )
 def administrator_plays_playbook(
-    deployed_fleet: Fleet, enrolled: str, excluded: str | None = None
+    fleet: Fleet,
+    playbook: Path,
+    administrator: Administrator,
+    portal_session: Session,
+    excluded: str | None = None,
 ) -> None:
-    """The play is run by the fixture, once for the feature.
+    """The play is run once for the feature, on the hosts it keeps.
 
-    A host the feature says is left out must be outside the limit the
-    fixture gives the play, or the two say different things.
+    A host the feature leaves out is outside the limit, and stays
+    unconfigured; a host it keeps is deployed and enrolled.
 
     """
-    if excluded is not None and excluded in enrolled.split(","):
-        pytest.fail(
-            f"The feature leaves {excluded} out, but the play is given "
-            f"--limit {enrolled}",
-            pytrace=False,
-        )
+    hosts = [machine.name for machine in fleet.machines() if machine.name != excluded]
+    play = administrator.play_once(
+        fleet, portal_session, inventory_for(fleet), limit=",".join(hosts)
+    )
+    if not play.succeeded:
+        raise RuntimeError(play.describe())
 
 
 @when(
@@ -126,7 +125,7 @@ def administrator_plays_again(
     name: str,
     host: str,
     administrator: Administrator,
-    deployed_fleet: Fleet,
+    fleet: Fleet,
     user_factory: Callable[[str], User],
     portal_sessions: Callable[[str], Session | None],
 ) -> Play:
@@ -135,8 +134,9 @@ def administrator_plays_again(
     if session is None:
         pytest.fail(f"{name} has no session on the portal, there is no token to mint")
     return administrator.play_playbook(
-        deployed_fleet,
+        fleet,
         session,
+        inventory_for(fleet),
         as_user=user_factory(name),
         limit=host,
     )
@@ -152,11 +152,13 @@ def administrator_plays_again(
 def administrator_plays_as_service_account(
     host: str,
     administrator: Administrator,
-    deployed_fleet: Fleet,
+    fleet: Fleet,
     portal_session: Session,
 ) -> Play:
     """Play the tree again as the account the inventory names."""
-    return administrator.play_playbook(deployed_fleet, portal_session, limit=host)
+    return administrator.play_playbook(
+        fleet, portal_session, inventory_for(fleet), limit=host
+    )
 
 
 @then("the play succeeds")
@@ -233,7 +235,8 @@ def user_signs_its_public_key(
 def user_copies_its_public_key(
     name: str,
     host: str,
-    copied_public_keys: Callable[[str, str], User],
+    fleet: Fleet,
+    copied_public_keys: Callable[[str, str, Fleet], User],
 ) -> User:
     """Leave the key of a local account on a machine, as its owner would.
 
@@ -242,7 +245,7 @@ def user_copies_its_public_key(
     that key once configured is what the scenarios ask.
 
     """
-    return copied_public_keys(name, host)
+    return copied_public_keys(name, host, fleet)
 
 
 @given("the administrator set pam-access SSH rule to:")
@@ -290,7 +293,7 @@ def portal_workers_reload_configuration(llng: Llng) -> None:
 
 
 @given("the administrator drops the authorization cache of the fleet")
-def administrator_drops_authorization_cache(fresh_fleet: Fleet) -> None:
+def administrator_drops_authorization_cache(fleet: Fleet) -> None:
     """Make the machines ask the portal again.
 
     They cache the authorization answers for a minute, so without this the
@@ -299,7 +302,7 @@ def administrator_drops_authorization_cache(fresh_fleet: Fleet) -> None:
     and when they learn it is part of what the scenarios are about.
 
     """
-    fresh_fleet.forget_authorizations()
+    fleet.forget_authorizations()
 
 
 @when("the portal is down")
@@ -317,7 +320,7 @@ def portal_is_down(portal_down: None) -> None:
         r'the authorization of "(?P<name>[^"]+)" is cached on "(?P<host>[\w.-]+)"'
     )
 )
-def authorization_is_cached(name: str, host: str, deployed_fleet: Fleet) -> None:
+def authorization_is_cached(name: str, host: str, fleet: Fleet) -> None:
     """The machine kept the answer the portal gave for the user.
 
     What is cached is the authorization, not the key: the entry holds the
@@ -325,11 +328,9 @@ def authorization_is_cached(name: str, host: str, deployed_fleet: Fleet) -> None
     certificate on its own before PAM is asked.
 
     """
-    machine = deployed_fleet.machine(host)
-    if not deployed_fleet.cached_authorization(machine, name):
-        listing = deployed_fleet.run_as_root(
-            machine, f"ls -l {AUTHORIZATION_CACHE}"
-        ).stdout
+    machine = fleet.machine(host)
+    if not fleet.cached_authorization(machine, name):
+        listing = fleet.run_as_root(machine, f"ls -l {AUTHORIZATION_CACHE}").stdout
         pytest.fail(
             f"{host} holds no authorization for {name}: expected "
             f"{authorization_entry(machine, name)}.\n{listing}",
@@ -342,9 +343,9 @@ def authorization_is_cached(name: str, host: str, deployed_fleet: Fleet) -> None
         r'the authorization of "(?P<name>[^"]+)" is removed from "(?P<host>[\w.-]+)"'
     )
 )
-def authorization_is_removed(name: str, host: str, deployed_fleet: Fleet) -> None:
+def authorization_is_removed(name: str, host: str, fleet: Fleet) -> None:
     """Drop the entry, as the time to live of the cache would."""
-    deployed_fleet.forget_authorization(deployed_fleet.machine(host), name)
+    fleet.forget_authorization(fleet.machine(host), name)
 
 
 @then("the hop cannot be made")
@@ -370,7 +371,7 @@ def hop_cannot_be_made(connection: HopResult) -> None:
 def service_account_connects(
     name: str,
     host: str,
-    deployed_fleet: Fleet,
+    fleet: Fleet,
     service_account: Callable[[str], ServiceAccount],
 ) -> SshResult:
     """Try the key the deployment serves for the account.
@@ -380,7 +381,7 @@ def service_account_connects(
     no portal are involved.
 
     """
-    return service_account(name).connect(deployed_fleet.machine(host))
+    return service_account(name).connect(fleet.machine(host))
 
 
 @when(
@@ -393,7 +394,7 @@ def service_account_connects(
 def service_account_runs_sudo(
     name: str,
     host: str,
-    deployed_fleet: Fleet,
+    fleet: Fleet,
     service_account: Callable[[str], ServiceAccount],
 ) -> SudoResult:
     """Try to elevate as the account, with nothing to give sudo.
@@ -402,7 +403,7 @@ def service_account_runs_sudo(
     configured machine has nothing to check the elevation against.
 
     """
-    return service_account(name).sudo(deployed_fleet.machine(host))
+    return service_account(name).sudo(fleet.machine(host))
 
 
 @when(
@@ -475,13 +476,11 @@ def recording_holds(
     name: str,
     bastion: str,
     datatable: list[list[str]],
-    deployed_fleet: Fleet,
+    fleet: Fleet,
 ) -> None:
     """What the session printed is in the recordings of the bastion."""
-    machine = deployed_fleet.machine(bastion)
-    recordings = deployed_fleet.run_as_root(
-        machine, f"cat {SESSIONS}/{name}/*.typescript"
-    )
+    machine = fleet.machine(bastion)
+    recordings = fleet.run_as_root(machine, f"cat {SESSIONS}/{name}/*.typescript")
     if not recordings.succeeded:
         pytest.fail(
             f"{bastion} recorded no session of {name}: {recordings.describe()}",
@@ -557,16 +556,16 @@ def user_runs_sudo_command(
 def administrator_revokes_certificate(
     name: str,
     user_factory: Callable[[str], User],
-    deployed_fleet: Fleet,
+    fleet: Fleet,
     llng: Llng,
     scenario_dir: Path,
 ) -> None:
     """Publish on the portal a list that revokes the certificate of the user."""
     bastion = next(
-        machine for machine in deployed_fleet.machines() if machine.type is Role.BASTION
+        machine for machine in fleet.machines() if machine.type is Role.BASTION
     )
     ca_key = scenario_dir / "open-bastion_ca.pub"
-    ca_key.write_text(deployed_fleet.read_as_root(bastion, CA_KEY))
+    ca_key.write_text(fleet.read_as_root(bastion, CA_KEY))
     krl = revocation_list(
         user_factory(name).certificate, ca_key, scenario_dir / "revoked_keys"
     )

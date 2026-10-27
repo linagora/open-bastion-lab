@@ -3,8 +3,11 @@
 ob-builder writes two kinds of artefact for the same deployment, one per
 target role: an Ansible tree a control node plays, and a self-extracting
 installer each target runs itself. This module holds what both need — the
-key of the tests folded into the configuration, and the repository the
-fleet installs from — and what running the Ansible one did.
+key of the tests folded into the configuration, the repository the fleet
+installs from — and what running the Ansible one did.
+
+What a feature deploys, and with which configuration, is what its steps
+name; nothing here decides it.
 
 """
 
@@ -24,9 +27,6 @@ from open_bastion_tests.support.ssh import User
 
 LOGGER = logging.getLogger(__name__)
 
-TWO_BACKENDS_INVENTORY = data("inventory-for-two-backends.yml")
-THREE_BACKENDS_INVENTORY = data("inventory-for-three-backends.yml")
-
 KEY_PATTERN = re.compile(r"^(?P<indent>[ \t]*)public_key_file:.*$", re.MULTILINE)
 INVENTORY_KEY_PATTERN = re.compile(
     r"^(?P<indent>[ \t]*)ansible_ssh_private_key_file:.*$", re.MULTILINE
@@ -44,20 +44,35 @@ BUILD_LOG = "ob-builder.log"
 INSTALLERS = "shell"
 
 
-def apt_repository_url() -> str:
-    """Base URL of the repository the fleet installs packages from.
+# Every inventory the tests own points the fleet at the same repository, the
+# lab's own; a check that runs before a feature named a fleet reads that one.
+LAB_INVENTORY = data("inventory-for-two-backends.yml")
 
-    Read from the inventory the tests hand to ansible-playbook, so a check
-    of that repository looks at the address the machines are given.
+
+def inventory_for(fleet: Fleet) -> Path:
+    """The inventory the tests own for a fleet, named after it."""
+    return data(f"inventory-for-{fleet.name}.yml")
+
+
+def llng_configuration(name: str) -> Path:
+    """The portal configuration the tests own, named as a feature names it."""
+    return data(f"llng/with-two-oidc-rp/{name}.json")
+
+
+def apt_repository_url(inventory: Path = LAB_INVENTORY) -> str:
+    """Base URL of the repository an inventory gives the fleet.
+
+    Read from the inventory the machines are given, so a check of that
+    repository looks at the address they install from.
 
     """
-    sources = APT_SOURCES_PATTERN.search(TWO_BACKENDS_INVENTORY.read_text())
+    sources = APT_SOURCES_PATTERN.search(inventory.read_text())
     if sources is None:
-        raise RuntimeError(f"No ob_apt_sources_list_line in {TWO_BACKENDS_INVENTORY}")
+        raise RuntimeError(f"No ob_apt_sources_list_line in {inventory}")
     url = APT_URL_PATTERN.search(sources.group("line"))
     if url is None:
         raise RuntimeError(
-            f"No URL in {sources.group('line').strip()!r}, read from {TWO_BACKENDS_INVENTORY}"
+            f"No URL in {sources.group('line').strip()!r}, read from {inventory}"
         )
     return url.group(0).rstrip("/")
 
@@ -92,40 +107,41 @@ class Play:
 
 
 class Administrator:
-    """An administrator deploying open-bastion on the fleet.
+    """An administrator deploying open-bastion on a fleet.
 
-    It builds with the configuration the module names, one of the files the
+    It builds with the configuration a step names, one of the files the
     tests own, and with the key they made for the maintainer account: no
-    other key is involved, in that configuration or in the inventory. A
-    deployment by installers has no inventory to give it.
+    other key is involved, in that configuration or in the inventory.
+
+    The artefacts it built and the plays it ran are kept: the Background of
+    a feature runs again before each of its scenarios, and building or
+    deploying sixteen times is not what it describes.
 
     """
 
     work_dir: Path
     key: Path
-    configuration: str
-    inventory: Path | None
+    playbooks: dict[str, Path]
+    plays: dict[tuple[str, str], Play]
 
-    def __init__(
-        self,
-        work_dir: Path,
-        key: Path,
-        configuration: str,
-        inventory: Path | None = None,
-    ):
+    def __init__(self, work_dir: Path, key: Path):
         self.work_dir = work_dir
         self.key = key
-        self.configuration = configuration
-        self.inventory = inventory
+        self.playbooks = {}
+        self.plays = {}
 
-    def generate_playbook(self) -> Path:
-        """Generate the playbook of the configuration it was given.
+    def generate_playbook(self, configuration: str) -> Path:
+        """Generate the playbook of a configuration, once.
 
         ob-builder reaches the portal while building: it reads the SSO
         metadata, the SSH CA key and the revocation list from it.
 
         """
-        source = data(f"{self.configuration}.yml")
+        playbook = self.playbooks.get(configuration)
+        if playbook is not None:
+            return playbook
+
+        source = data(f"{configuration}.yml")
         config_file = self.work_dir / source.name
         config_file.write_text(self._config(source))
 
@@ -146,10 +162,15 @@ class Administrator:
         if not playbook.is_file():
             raise RuntimeError(f"No playbook generated at {playbook}")
         LOGGER.info("Generated %s", playbook)
+        self.playbooks[configuration] = playbook
         return playbook
 
     def generate_installer(
-        self, role: Role, *, allowed_bastions: str | None = None
+        self,
+        configuration: str,
+        role: Role,
+        *,
+        allowed_bastions: str | None = None,
     ) -> Path:
         """Write the self-extracting installer of one role.
 
@@ -159,7 +180,7 @@ class Administrator:
         only exist once the bastion is enrolled.
 
         """
-        source = data(f"{self.configuration}.yml")
+        source = data(f"{configuration}.yml")
         text, count = TARGET_ROLE_PATTERN.subn(
             f'target_role: "{role}"', self._config(source)
         )
@@ -196,10 +217,22 @@ class Administrator:
         LOGGER.info("Generated %s", installer)
         return installer
 
+    def play_once(
+        self, fleet: Fleet, session: Session, inventory: Path, *, limit: str | None
+    ) -> Play:
+        """Play the tree once for a fleet and a limit, then answer what it did."""
+        key = (fleet.name, limit or "")
+        play = self.plays.get(key)
+        if play is None:
+            play = self.play_playbook(fleet, session, inventory, limit=limit)
+            self.plays[key] = play
+        return play
+
     def play_playbook(
         self,
         fleet: Fleet,
         session: Session,
+        inventory: Path,
         *,
         as_user: User | None = None,
         limit: str | None = None,
@@ -238,7 +271,7 @@ class Administrator:
         args = [
             command.which("ansible-playbook"),
             "-i",
-            str(self._inventory()),
+            str(self._inventory(inventory)),
             PLAYBOOK,
         ]
         if limit is not None:
@@ -292,17 +325,15 @@ class Administrator:
             raise RuntimeError(f"No public_key_file to set in {source}")
         return text
 
-    def _inventory(self) -> Path:
+    def _inventory(self, inventory: Path) -> Path:
         """The inventory, with the key of the tests instead of the example one."""
-        if self.inventory is None:
-            raise RuntimeError("A play needs an inventory, and the build named none")
         text, count = INVENTORY_KEY_PATTERN.subn(
             rf"\g<indent>ansible_ssh_private_key_file: {self.key}",
-            self.inventory.read_text(),
+            inventory.read_text(),
         )
         if count == 0:
-            raise RuntimeError(f"No ansible_ssh_private_key_file in {self.inventory}")
+            raise RuntimeError(f"No ansible_ssh_private_key_file in {inventory}")
 
-        path = self.work_dir / self.inventory.name
+        path = self.work_dir / inventory.name
         path.write_text(text)
         return path

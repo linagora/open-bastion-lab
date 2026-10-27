@@ -41,6 +41,8 @@ testpaths = ["open_bastion_tests"]
 addopts = "-p open_bastion_tests.steps.ssh_access -p open_bastion_tests.steps.deployment -p open_bastion_tests.steps.debug -m 'not debug'"
 markers = [
     "debug: configure the lab for debugging and wait on purpose",
+    "ansible: a feature deploying the ob-builder Ansible tree",
+    "installer: a feature deploying the self-extracting installers",
 ]
 pythonpath = ["."]
 bdd_features_base_dir = "open_bastion_tests/features"

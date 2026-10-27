@@ -5,48 +5,14 @@ from pathlib import Path
 import pytest
 from pytest_bdd import scenario
 
-from open_bastion_tests.support.fleet import Fleet, data
 from open_bastion_tests.support.installer import InstallerBasedDeployment
-from open_bastion_tests.support.llng import Llng, Session
-from open_bastion_tests.support.deployment import Administrator
 
 FEATURE = "self_extracting_installer_maximum_security.feature"
 
-# What the Background of the feature names, and what its scenarios run
-# against. pytest needs them before the scenario starts, so they are given
-# here as well as in the feature.
-FLEET = "three-backends"
-CONFIGURATION = "ob-builder-max-security"
-ENROLLED = "bastion-1,backend-1,backend-2"
-LLNG_CONFIG = data("llng/with-two-oidc-rp/lmConf-with-plugins-configured.json")
-
-pytestmark = [
-    pytest.mark.parametrize("fleet", [FLEET], indirect=True),
-    pytest.mark.parametrize("configuration", [CONFIGURATION], indirect=True),
-    pytest.mark.parametrize("enrolled", [ENROLLED], indirect=True),
-    pytest.mark.parametrize(
-        "llng", [LLNG_CONFIG], indirect=True, ids=[LLNG_CONFIG.stem]
-    ),
-]
-
 
 @pytest.fixture(scope="module")
-def administrator(
-    module_dir: Path, maintainer_key: Path, configuration: str
-) -> Administrator:
-    """The administrator builds the installers: an inventory plays no part."""
-    return Administrator(module_dir, maintainer_key, configuration)
-
-
-@pytest.fixture(scope="module")
-def deployment(
-    fresh_fleet: Fleet,
-    administrator: Administrator,
-    llng: Llng,
-    portal_session: Session,
-    module_dir: Path,
-) -> InstallerBasedDeployment:
-    """What the steps of the Background do to the fleet, kept for the feature.
+def deployment(module_dir: Path) -> InstallerBasedDeployment:
+    """What the steps of the Background did to the fleet, kept for the feature.
 
     The fixture holds the state and nothing else: the deployment is the
     Background, step by step, because the keys of the local accounts are
@@ -54,38 +20,7 @@ def deployment(
     enrolment is approved while its installer waits for it.
 
     """
-    return InstallerBasedDeployment(
-        fresh_fleet, administrator, llng, portal_session, module_dir
-    )
-
-
-@pytest.fixture(scope="module")
-def deployed_fleet(deployment: InstallerBasedDeployment, fresh_fleet: Fleet) -> Fleet:
-    """The fleet open-bastion is installed and enrolled on.
-
-    It shadows the fleet the play-based modules deploy: the machines are the
-    same, what put open-bastion on them is not.
-
-    """
-    return fresh_fleet
-
-
-@pytest.fixture(autouse=True)
-def scenario_setup(
-    fresh_fleet: Fleet,
-    llng: Llng,
-    administrator: Administrator,
-    enrolled: str,
-) -> None:
-    """Ask for everything the feature parametrizes, before every scenario.
-
-    The fleet, the portal and the configuration ob-builder builds with are
-    parametrized, and pytest binds a parametrized fixture to a test only
-    when the test asks for it while it is collected: a step asking for them
-    once the scenario is running comes too late. The feature keeps them from
-    one scenario to the next.
-
-    """
+    return InstallerBasedDeployment(module_dir)
 
 
 @scenario(FEATURE, "Users known to the portal reach the bastion")
