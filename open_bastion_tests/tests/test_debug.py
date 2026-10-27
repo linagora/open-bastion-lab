@@ -5,7 +5,7 @@ from pytest_bdd import scenario
 
 from open_bastion_tests.support.fleet import Fleet, data
 from open_bastion_tests.support.llng import Llng
-from open_bastion_tests.support.playbook import Administrator
+from open_bastion_tests.support.deployment import Administrator
 
 FEATURE = "debug.feature"
 

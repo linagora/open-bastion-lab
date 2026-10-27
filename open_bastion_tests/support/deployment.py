@@ -1,4 +1,12 @@
-"""What an administrator does to the fleet: build and play a playbook."""
+"""What an administrator does to a fleet: build an artefact, or play it.
+
+ob-builder writes two kinds of artefact for the same deployment, one per
+target role: an Ansible tree a control node plays, and a self-extracting
+installer each target runs itself. This module holds what both need — the
+key of the tests folded into the configuration, and the repository the
+fleet installs from — and what running the Ansible one did.
+
+"""
 
 from dataclasses import dataclass
 from pathlib import Path
@@ -6,6 +14,8 @@ from pathlib import Path
 import json
 import logging
 import re
+
+from open_bastion_lab.model import Role
 
 from open_bastion_tests.support import command, public_key
 from open_bastion_tests.support.fleet import Fleet, data
@@ -25,10 +35,13 @@ APT_SOURCES_PATTERN = re.compile(
     r"^(?P<indent>[ \t]*)ob_apt_sources_list_line:[ \t]*(?P<line>\S.*)$", re.MULTILINE
 )
 APT_URL_PATTERN = re.compile(r"https?://[^\s\"]+")
+TARGET_ROLE_PATTERN = re.compile(r"^target_role:.*$", re.MULTILINE)
+ALLOWED_BASTIONS_PATTERN = re.compile(r"^allowed_bastions:.*$", re.MULTILINE)
 
 PLAYBOOK = "site.yml"
 LOG = "ansible-playbook.log"
 BUILD_LOG = "ob-builder.log"
+INSTALLERS = "shell"
 
 
 def apt_repository_url() -> str:
@@ -83,16 +96,23 @@ class Administrator:
 
     It builds with the configuration the module names, one of the files the
     tests own, and with the key they made for the maintainer account: no
-    other key is involved, in that configuration or in the inventory.
+    other key is involved, in that configuration or in the inventory. A
+    deployment by installers has no inventory to give it.
 
     """
 
     work_dir: Path
     key: Path
     configuration: str
-    inventory: Path
+    inventory: Path | None
 
-    def __init__(self, work_dir: Path, key: Path, configuration: str, inventory: Path):
+    def __init__(
+        self,
+        work_dir: Path,
+        key: Path,
+        configuration: str,
+        inventory: Path | None = None,
+    ):
         self.work_dir = work_dir
         self.key = key
         self.configuration = configuration
@@ -128,6 +148,54 @@ class Administrator:
         LOGGER.info("Generated %s", playbook)
         return playbook
 
+    def generate_installer(
+        self, role: Role, *, allowed_bastions: str | None = None
+    ) -> Path:
+        """Write the self-extracting installer of one role.
+
+        ob-builder reaches the portal while building, as it does for a
+        playbook. The role is part of the build: one installer per target,
+        and a backend installer also bakes the bastions it accepts, ids that
+        only exist once the bastion is enrolled.
+
+        """
+        source = data(f"{self.configuration}.yml")
+        text, count = TARGET_ROLE_PATTERN.subn(
+            f'target_role: "{role}"', self._config(source)
+        )
+        if count == 0:
+            raise RuntimeError(f"No target_role to set in {source}")
+        # The configuration leaves the ids to null, which asks the Ansible
+        # role to collect them from the bastions; a shell build has no play
+        # to do that and refuses the value, so it says "any bastion" instead.
+        identifier = allowed_bastions or ""
+        text, count = ALLOWED_BASTIONS_PATTERN.subn(
+            f'allowed_bastions: "{identifier}"', text
+        )
+        if count == 0:
+            raise RuntimeError(f"No allowed_bastions to set in {source}")
+        config_file = self.work_dir / f"{source.stem}-{role}.yml"
+        config_file.write_text(text)
+
+        output = self.work_dir / INSTALLERS
+        args = [
+            command.which("ob-builder"),
+            "--config",
+            str(config_file),
+            "--output-shell",
+            str(output),
+        ]
+        log = self.work_dir / f"{BUILD_LOG}-{role}"
+        result = command.run(args, log=log)
+        if result.returncode != 0:
+            raise RuntimeError(f"ob-builder failed, see {log}")
+
+        installer = next(output.glob(f"bootstrap-*-{role}.sh"), None)
+        if installer is None:
+            raise RuntimeError(f"No installer for the {role} role in {output}")
+        LOGGER.info("Generated %s", installer)
+        return installer
+
     def play_playbook(
         self,
         fleet: Fleet,
@@ -148,9 +216,10 @@ class Administrator:
         """
         known_hosts = self.work_dir / "known_hosts"
         known_hosts.touch()
-        # Extra variables are given as JSON: a "name=value" one is split on
-        # spaces by ansible, which mangles the options below.
-        common = f"-o StrictHostKeyChecking=no -o UserKnownHostsFile={known_hosts}"
+        common = (
+            f"-o StrictHostKeyChecking=no -o UserKnownHostsFile={known_hosts}"
+            " -o IdentitiesOnly=yes"
+        )
         extra = {"ob_llng_cookie": session.cookie, "ansible_ssh_common_args": common}
         if as_user is not None:
             extra.update(
@@ -158,8 +227,7 @@ class Administrator:
                     "ansible_user": as_user.name,
                     "ansible_ssh_private_key_file": str(as_user.key),
                     "ansible_ssh_common_args": (
-                        f"{common} -o IdentitiesOnly=yes"
-                        f" -o CertificateFile={as_user.certificate}"
+                        f"{common} -o CertificateFile={as_user.certificate}"
                     ),
                     "ansible_become_token_cmd": str(self._token_command(session)),
                     # Ignored by ob_sudo_sso, which mints the token per prompt;
@@ -226,6 +294,8 @@ class Administrator:
 
     def _inventory(self) -> Path:
         """The inventory, with the key of the tests instead of the example one."""
+        if self.inventory is None:
+            raise RuntimeError("A play needs an inventory, and the build named none")
         text, count = INVENTORY_KEY_PATTERN.subn(
             rf"\g<indent>ansible_ssh_private_key_file: {self.key}",
             self.inventory.read_text(),

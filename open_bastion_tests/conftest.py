@@ -29,7 +29,7 @@ import urllib.request
 from open_bastion_tests.support import command
 from open_bastion_tests.support.fleet import Fleet, data
 from open_bastion_tests.support.llng import ADMIN_USER, Llng, Session
-from open_bastion_tests.support.playbook import Administrator, apt_repository_url
+from open_bastion_tests.support.deployment import Administrator, apt_repository_url
 from open_bastion_tests.support.ssh import ServiceAccount, User
 
 MAINTAINER_KEY_NAME = "id_ob_tests_maintainer"

@@ -127,12 +127,13 @@ need, what they do and what they leave behind.
 
 ⏰ Test can be long to execute…
 
-To run a selection of scenarios, forge a command modeled as:
+To run a selection of scenarios, one can use their tags, eg `pytest -m
+ansible`, or use the corresponding tests with a command modeled as:
 
 ```bash
-FEATURE_PATH=open_bastion_tests/tests/test_ansible_playbook_maximum_security.py
+TEST_PATH=open_bastion_tests/tests/test_ansible_playbook_maximum_security.py
 SCENARIO=test_bastion_access_removed
-pytest "${FEATURE_PATH}::${SCENARIO}"
+pytest "${TEST_PATH}::${SCENARIO}"
 ```
 
 Add `-x` to stop at the first failing test (`--maxfail=N` to stop after N

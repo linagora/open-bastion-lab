@@ -7,7 +7,7 @@ machines, which runs as root before PAM and sshd. See
 
 """
 
-from pytest_bdd import parsers, then
+from pytest_bdd import given, parsers, then
 
 import logging
 import re
@@ -18,6 +18,7 @@ from open_bastion_lab.model import Role
 
 from open_bastion_tests.support import guest_agent
 from open_bastion_tests.support.fleet import Fleet
+from open_bastion_tests.support.installer import InstallerBasedDeployment
 
 LOGGER = logging.getLogger(__name__)
 
@@ -30,6 +31,88 @@ BASTION_ID = "/usr/bin/ob-bastion-id"
 # The sudo stack of a maximum security host asks the portal, and refuses
 # what it does not answer
 SUDO_STACK_PATTERNS = (r"pam_openbastion\.so", r"pam_deny\.so")
+
+
+@given(
+    parsers.re(
+        r"the administrator generates the installer of the bastion with "
+        r'the "(?P<name>[^"]+)" configuration'
+    )
+)
+def administrator_generates_the_bastion_installer(
+    name: str, deployment: InstallerBasedDeployment
+) -> None:
+    """ob-builder is run by the fixture, for the bastion first.
+
+    Naming the configuration in the feature says which deployment the
+    scenarios describe, and this is where that name meets the one the
+    administrator builds with.
+
+    """
+    configuration = deployment.administrator.configuration
+    if configuration != name:
+        pytest.fail(
+            f"The feature names the configuration {name}, but ob-builder "
+            f"builds with {configuration}"
+        )
+    installer = deployment.build_bastion_installer()
+    LOGGER.info("The bastion installer of %s is %s", name, installer)
+
+
+@given(
+    parsers.re(
+        r"the administrator generates the installer of the backends allowing "
+        r'the bastion "(?P<host>[^"]+)"'
+    )
+)
+def administrator_generates_the_backend_installer(
+    host: str, deployment: InstallerBasedDeployment
+) -> None:
+    """The backends allow the id the bastion printed, and only that id.
+
+    It is baked into the installer, which is why the backends are built
+    after the bastion is enrolled.
+
+    """
+    installer = deployment.build_backend_installer(host)
+    allowed = deployment.allowed_bastions(Role.BACKEND)
+    if allowed != deployment.identifier:
+        pytest.fail(
+            f"The backend installer allows {allowed!r} instead of the id "
+            f"{deployment.identifier} of {host}",
+            pytrace=False,
+        )
+    LOGGER.info("The backends allow %s, the id of %s, in %s", allowed, host, installer)
+
+
+@given(parsers.re(r'the administrator runs the installer on "(?P<host>[^"]+)"'))
+def administrator_runs_the_installer(
+    host: str, deployment: InstallerBasedDeployment
+) -> None:
+    """The installer is copied to the host and started, as root.
+
+    It enrols the host and then waits, so it is not waited on here: the code
+    it publishes is approved by the next step.
+
+    """
+    deployment.start(host)
+
+
+@given(parsers.re(r'the administrator approves the enrolment of "(?P<host>[^"]+)"'))
+def administrator_approves_the_enrolment(
+    host: str, deployment: InstallerBasedDeployment
+) -> None:
+    """The device code the host published is approved on the portal."""
+    code = deployment.approve(host)
+    LOGGER.info("The device code %s of %s was approved", code, host)
+
+
+@given(parsers.re(r'the installer of "(?P<host>[^"]+)" succeeded'))
+def installer_succeeded(host: str, deployment: InstallerBasedDeployment) -> None:
+    """The installer finished, and the host is configured."""
+    installation = deployment.finish(host)
+    if not installation.succeeded:
+        pytest.fail(installation.describe(), pytrace=False)
 
 
 @then(parsers.re(r'the sudo stack of "(?P<name>[^"]+)" asks the portal'))

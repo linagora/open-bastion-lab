@@ -14,7 +14,7 @@ from open_bastion_tests.support.fleet import (
     authorization_entry,
 )
 from open_bastion_tests.support.llng import Llng, Session
-from open_bastion_tests.support.playbook import Administrator, Play
+from open_bastion_tests.support.deployment import Administrator, Play
 from open_bastion_tests.support.ssh import (
     Connection,
     HopResult,
@@ -446,7 +446,7 @@ def user_hops(
 @when(
     parsers.re(
         r'user "?(?P<name>[\w.-]+)"? hops from "(?P<bastion>[\w.-]+)" '
-        r'to "(?P<backend>[\w.-]+)" through SSH and runs "(?P<command>[^"]+)"'
+        r'to "(?P<backend>[\w.-]+)" through SSH and runs'
     ),
     target_fixture="connection",
 )
@@ -454,12 +454,18 @@ def user_hops_and_runs(
     name: str,
     bastion: str,
     backend: str,
-    command: str,
+    docstring: str,
     user_factory: Callable[[str], User],
     user_ssh_config: Path,
 ) -> HopResult:
-    """Reach the backend and run the given commands there."""
-    return user_factory(name).hop(bastion, backend, user_ssh_config, command)
+    """Reach the backend and run the commands the step carries.
+
+    They come as its docstring, one per line, and reach the backend as
+    one script: its shell expands what they contain, as it would for a
+    person typing them into the session.
+
+    """
+    return user_factory(name).hop(bastion, backend, user_ssh_config, docstring)
 
 
 @then(

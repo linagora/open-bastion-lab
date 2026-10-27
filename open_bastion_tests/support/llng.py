@@ -312,6 +312,38 @@ class Llng:
             return None
         return Session(user=user, cookie=cookie, opener=opener)
 
+    def approve_device(self, session: Session, user_code: str) -> None:
+        """Approve a device code, as the administrator would in a browser.
+
+        A host enrolling with the device authorization grant publishes a code
+        and waits for it to be approved; the configuration only lets the
+        timelords approve. The page carries a CSRF token that the approval
+        has to give back, which is what the Ansible role of the deployment
+        does as well (``_enroll.yml``).
+
+        """
+        page_url = f"{self.portal_url}/device?user_code={urllib.parse.quote(user_code)}"
+        with session.opener.open(page_url, timeout=30) as response:
+            page = response.read().decode()
+        token = TOKEN_PATTERN.search(page)
+        if token is None or not token.group(1):
+            raise LlngError(
+                f"The device page of {self.portal_url} offers no token for "
+                f"{user_code}: {_message(page)}"
+            )
+        payload = urllib.parse.urlencode(
+            {"user_code": user_code, "action": "approve", "token": token.group(1)}
+        ).encode()
+        try:
+            with session.opener.open(
+                urllib.request.Request(f"{self.portal_url}/device", data=payload),
+                timeout=30,
+            ) as response:
+                answer = response.read().decode()
+        except urllib.error.HTTPError as e:
+            raise LlngError(f"The approval of {user_code} failed with {e.code}") from e
+        LOGGER.info("Approved the device code %s: %s", user_code, _message(answer))
+
     def pam_ssh_rules(self) -> dict[str, str]:
         """SSH access rules of the portal, per server group."""
         result = self._exec("lemonldap-ng-cli", "-json", "get", "pamAccessSshRules")

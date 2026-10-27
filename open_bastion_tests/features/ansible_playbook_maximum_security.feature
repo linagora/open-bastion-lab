@@ -1,3 +1,4 @@
+@ansible
 Feature: Ansible playbook for maximum security
 
   The playbook an administrator builds with ob-builder installs open-bastion on
@@ -5,8 +6,6 @@ Feature: Ansible playbook for maximum security
   with a certificate the portal signed, and the backends by hopping from a
   bastion, which vouches for them.
 
-  # pshark copies its key before the machines are configured, while it can
-  # still log in with the trivial password the fleet gives its accounts.
   Background:
     Given the fleet "three-backends" is ready
     And the LLNG configuration is "lmConf-with-plugins-configured"
@@ -38,10 +37,16 @@ Feature: Ansible playbook for maximum security
       | msmith | success |
 
   Scenario: Users not known to the portal can't access the bastion
+    # pshark copied its key before the machines are configured, while
+    # it can still log in with the trivial password the fleet gives
+    # its accounts.
     When user "pshark" tries to connect to "bastion-1" through SSH
     Then the result is fails
 
   Scenario: Users not known to the portal can't access the backend
+    # pshark copied its key before the machines are configured, while
+    # it can still log in with the trivial password the fleet gives
+    # its accounts.
     When user "pshark" tries to connect to "backend-2" through SSH
     Then the result is fails
 
@@ -156,7 +161,12 @@ Feature: Ansible playbook for maximum security
 
   Scenario: The bastion records what a user does on a backend
     Given user "msmith" has signed its SSH public key
-    When user "msmith" hops from "bastion-1" to "backend-1" through SSH and runs "echo first-command; echo output-$((40+2)); nohup sleep 60 >/dev/null 2>&1 & echo nohup-attempted"
+    When user "msmith" hops from "bastion-1" to "backend-1" through SSH and runs
+      """
+      echo first-command
+      echo output-$((40+2))
+      nohup sleep 60 >/dev/null 2>&1 & echo nohup-attempted
+      """
     Then the result is success
     And the recording of "msmith" on "bastion-1" holds:
       | first-command   |

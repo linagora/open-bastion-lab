@@ -1,3 +1,4 @@
+@ansible
 Feature: Ansible playbook for maximum security with hardening
 
   The hardening of the deployment has the system clean up after a session:
@@ -12,7 +13,10 @@ Feature: Ansible playbook for maximum security with hardening
 
   Scenario: A command left running is recorded and does not outlive the session
     Given user "msmith" has signed its SSH public key
-    When user "msmith" hops from "bastion-1" to "backend-1" through SSH and runs "nohup sleep 120 >/dev/null 2>&1 & echo started"
+    When user "msmith" hops from "bastion-1" to "backend-1" through SSH and runs
+      """
+      nohup sleep 120 >/dev/null 2>&1 & echo started
+      """
     Then the result is success
     And the recording of "msmith" on "bastion-1" holds:
       | started |
