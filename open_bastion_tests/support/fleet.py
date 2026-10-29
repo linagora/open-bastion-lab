@@ -296,7 +296,19 @@ class Labs:
         self.restored: set[tuple[str, str]] = set()
 
     def ready(self, name: str, *, feature: str) -> Fleet:
-        """The fleet a feature names, restored for it the first time it asks."""
+        """The fleet a feature names, restored for it the first time it asks.
+
+        The lab holds one fleet at a time: the machines of another fleet are
+        freed first. The fleets of the suite share names — `bastion-1` is the
+        bastion of both of them — and a machine's address and MAC are derived
+        from its name, so the next fleet cannot be created while the previous
+        one is up. What a failed feature left behind stays in its artifacts
+        directory; the machines go, so that one failure does not cost the
+        features that follow.
+
+        """
+        for other in [other for other in self.fleets if other != name]:
+            self.fleets.pop(other).delete()
         fleet = self.fleets.get(name)
         if fleet is None:
             fleet = Fleet(name, self.key)
