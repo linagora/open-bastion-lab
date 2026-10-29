@@ -832,7 +832,7 @@
    "sshCaCertMaxValidity": 365,
    "sshCaKeyRef": "ssh-ca",
    "sshCaKrlPath": "/var/lib/lemonldap-ng/ssh/revoked_keys",
-   "sshCaMaxCertsPerUser": 20,
+   "sshCaMaxCertsPerUser": 100,
    "sshCaMinKeyBits": 2048,
    "sshCaPrincipalSources": "$uid",
    "sshCaSignMaxPerHour": 20,

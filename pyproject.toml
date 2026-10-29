@@ -1,7 +1,7 @@
 [project]
 name = "open-bastion-lab"
 version = "0.1.0"
-description = "Add your description here"
+description = "Virtual infrastructure for functional testing of open-bastion"
 readme = "README.md"
 authors = [
     { name = "Matthias Meulien", email = "mmeulien@linagora.com" }
