@@ -275,6 +275,12 @@ def local_user_home(module_dir: Path) -> Path:
 
 
 @pytest.fixture(scope="module")
+def recorded_configurations() -> dict[str, dict[str, str | None]]:
+    """What a step found on a host, for the step that compares it later."""
+    return {}
+
+
+@pytest.fixture(scope="module")
 def copied_public_keys(
     local_user_home: Path,
 ) -> Callable[[str, str, Fleet], User]:

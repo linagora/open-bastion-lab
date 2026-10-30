@@ -12,8 +12,11 @@ runs before PAM and sshd. See :mod:`open_bastion_tests.support.guest_agent`.
 
 from pytest_bdd import given, parsers, then
 
+import base64
+import difflib
 import logging
 import re
+import shlex
 
 import pytest
 
@@ -32,6 +35,23 @@ CONFIG = "/etc/open-bastion/openbastion.conf"
 SUDO_STACK = "/etc/pam.d/sudo"
 ALLOWED_BASTIONS = "/etc/open-bastion/allowed_bastions"
 BASTION_ID = "/usr/bin/ob-bastion-id"
+
+# What the setup of a maximum security host writes. The revocation list is
+# not here: the setup downloads it from the portal, so a replay may legitimately
+# see a newer one.
+CONFIGURATION = (
+    "/etc/open-bastion/openbastion.conf",
+    "/etc/open-bastion/nss_openbastion.conf",
+    "/etc/open-bastion/session-recorder.conf",
+    "/etc/open-bastion/ssh-proxy.conf",
+    "/etc/ssh/sshd_config.d/00-open-bastion-bastion.conf",
+    "/etc/ssh/sshd_config.d/09-open-bastion-service-keys.conf",
+    "/etc/ssh/sshd_config.d/60-max-security.conf",
+    "/etc/pam.d/sshd",
+    "/etc/pam.d/sudo",
+    "/etc/pam.d/sudo-i",
+)
+REVOCATION_LIST = "/etc/ssh/revoked_keys"
 
 # The sudo stack of a maximum security host asks the portal, and refuses
 # what it does not answer
@@ -220,6 +240,110 @@ def no_process_is_left(name: str, host: str, fleet: Fleet) -> None:
         pytest.fail(
             f"{host} still runs processes of {name}:\n{result.stdout}", pytrace=False
         )
+
+
+@given(parsers.re(r'the administrator records the configuration of "(?P<host>[^"]+)"'))
+def administrator_records_the_configuration(
+    host: str,
+    fleet: Fleet,
+    recorded_configurations: dict[str, dict[str, str | None]],
+) -> None:
+    """Take the files the setup wrote, to compare them once the play ran again."""
+    machine = fleet.machine(host)
+    recorded_configurations[host] = {
+        path: _configuration_file(machine, path) for path in CONFIGURATION
+    }
+    LOGGER.info("Recorded the configuration of %s", host)
+
+
+@then(parsers.re(r'the configuration of "(?P<host>[^"]+)" is unchanged'))
+def configuration_is_unchanged(
+    host: str,
+    fleet: Fleet,
+    recorded_configurations: dict[str, dict[str, str | None]],
+) -> None:
+    """The play rewrote nothing that differs: a replay converges.
+
+    The recap counts the setup task as changed whatever it does — it is what
+    applies an upgraded package — so what a replay did is read here, on the
+    files themselves.
+
+    """
+    recorded = recorded_configurations.get(host)
+    if recorded is None:
+        pytest.fail(f"The configuration of {host} was never recorded", pytrace=False)
+    machine = fleet.machine(host)
+
+    differences = []
+    for path, before in recorded.items():
+        after = _configuration_file(machine, path)
+        if after == before:
+            continue
+        differences.append(_difference(path, before, after))
+    if differences:
+        pytest.fail(
+            f"The play changed the configuration of {host}:\n" + "\n".join(differences),
+            pytrace=False,
+        )
+    LOGGER.info("The configuration of %s is unchanged", host)
+
+
+@then(
+    parsers.re(
+        r'the revocation list of "(?P<host>[^"]+)" holds what the portal revoked'
+    )
+)
+def revocation_list_holds_what_the_portal_revoked(
+    host: str, fleet: Fleet, llng: Llng
+) -> None:
+    """The host holds the list the portal serves, not the artefact's copy.
+
+    The role deploys the KRL `ob-builder` fetched when it built the artefact:
+    on a host the deployment already configured, that copy is older than what
+    the portal revoked since.
+
+    """
+    machine = fleet.machine(host)
+    served = llng.revocation_list()
+    held = _binary_file(machine, REVOCATION_LIST)
+    if held != served:
+        pytest.fail(
+            f"{host} holds a revocation list of {len(held)} bytes, the portal "
+            f"serves {len(served)}: the build-time copy was deployed over the "
+            f"one the setup downloads",
+            pytrace=False,
+        )
+    LOGGER.info("%s holds the portal's revocation list", host)
+
+
+def _configuration_file(machine, path: str) -> str | None:
+    """What a file holds on a machine, or None when it is not there."""
+    try:
+        return guest_agent.read_text(machine.name, path)
+    except guest_agent.AgentError:
+        return None
+
+
+def _binary_file(machine, path: str) -> bytes:
+    """What a binary file holds on a machine, as base64 comes out of the agent."""
+    result = guest_agent.shell(machine.name, f"base64 -w0 -- {shlex.quote(path)}")
+    if not result.succeeded:
+        return b""
+    return base64.b64decode(result.stdout.strip())
+
+
+def _difference(path: str, before: str | None, after: str | None) -> str:
+    """What the two versions of a file differ by, for the failure message."""
+    if before is None or after is None:
+        return f"  {path}: {'appeared' if before is None else 'disappeared'}"
+    diff = difflib.unified_diff(
+        before.splitlines(keepends=True),
+        after.splitlines(keepends=True),
+        fromfile=f"{path} (before)",
+        tofile=f"{path} (after)",
+        n=1,
+    )
+    return "".join(diff)[:2000]
 
 
 def _matches(content: str, pattern: str) -> bool:

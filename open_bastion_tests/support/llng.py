@@ -171,6 +171,15 @@ class Llng:
             stdin=encoded,
         )
 
+    def revocation_list(self) -> bytes:
+        """The KRL the portal serves, as a host's ob-krl-refresh downloads it.
+
+        The list is binary: it comes out of the container as base64.
+
+        """
+        result = self._exec("sh", "-c", f"base64 -w0 {CONTAINER_KRL}")
+        return base64.b64decode(result.stdout.strip())
+
     def stop(self) -> None:
         """Stop the portal, keeping the configuration it holds.
 

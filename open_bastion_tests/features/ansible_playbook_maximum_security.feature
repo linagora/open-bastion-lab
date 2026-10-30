@@ -127,16 +127,22 @@ Feature: Ansible playbook for maximum security
     Then the play changed nothing on "bastion-1"
     And the play warns that "bastion-1" keeps its SSO sudo
 
-  Scenario: Playing the tree again as an SSO user changes nothing
+  # The recap counts the setup task as changed whatever it does: it is what
+  # applies an upgraded package, so what a replay did is read on the files
+  # the setup wrote, and on the revocation list it downloaded.
+  Scenario: Playing the tree again as an SSO user leaves the configuration alone
     Given user "msmith" has signed its SSH public key
     And the administrator set pam-access sudo rule to:
       | bastion | $uid eq "msmith" |
     And the portal workers reloaded the configuration
     And the administrator drops the authorization cache of the fleet
+    And the administrator records the configuration of "bastion-1"
     When the administrator plays the playbook again as "msmith" for "bastion-1"
     Then the play succeeds
     When the administrator plays the playbook again as "msmith" for "bastion-1"
-    Then the play changed nothing on "bastion-1"
+    Then the play succeeds
+    And the configuration of "bastion-1" is unchanged
+    And the revocation list of "bastion-1" holds what the portal revoked
     And the play warns that "bastion-1" keeps its SSO sudo
 
   Scenario: A revoked certificate is refused once the list is refreshed

@@ -85,8 +85,10 @@ def test_second_playbook_by_a_service_account() -> None:
     pass
 
 
-@scenario(FEATURE, "Playing the tree again as an SSO user changes nothing")
-def test_second_playbook_is_idempotent() -> None:
+@scenario(
+    FEATURE, "Playing the tree again as an SSO user leaves the configuration alone"
+)
+def test_second_playbook_keeps_the_configuration() -> None:
     pass
 
 
