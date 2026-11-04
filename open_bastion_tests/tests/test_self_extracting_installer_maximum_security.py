@@ -53,38 +53,13 @@ def test_bastion_access_removed() -> None:
     pass
 
 
-@scenario(FEATURE, "Sudo on the backends follows the rules of the portal")
-def test_sudo_on_backends() -> None:
-    pass
-
-
-@scenario(FEATURE, "A user allowed to sudo on the backends can't sudo on the bastion")
-def test_sudo_on_bastion() -> None:
-    pass
-
-
-@scenario(FEATURE, "A user whose sudo access is removed can't sudo")
-def test_sudo_removed() -> None:
-    pass
-
-
-@scenario(FEATURE, "A service account reach the bastion but can't sudo")
-def test_service_account_on_bastion() -> None:
-    pass
-
-
-@scenario(FEATURE, "A service account reach the backends but can't sudo")
-def test_service_account_on_backends() -> None:
+@scenario(FEATURE, "The backends only accept the bastion of the fleet")
+def test_backends_accept_only_the_bastion() -> None:
     pass
 
 
 @scenario(FEATURE, "Sudo on the bastion goes through the portal")
 def test_sudo_goes_through_the_portal() -> None:
-    pass
-
-
-@scenario(FEATURE, "The backends only accept the bastion of the fleet")
-def test_backends_accept_only_the_bastion() -> None:
     pass
 
 

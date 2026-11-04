@@ -34,6 +34,9 @@ from open_bastion_tests.support.ssh import (
 CA_KEY = "/etc/ssh/open-bastion_ca.pub"
 SESSIONS = "/var/lib/open-bastion/sessions"
 
+# What sudo prints when its policy has no entry for the command it was given.
+POLICY_REFUSED = "is not allowed to execute"
+
 
 @given(parsers.re(r'the fleet "(?P<name>[^"]+)" is ready'), target_fixture="fleet")
 def fleet_is_ready(name: str, labs: Labs, request: pytest.FixtureRequest) -> Fleet:
@@ -469,6 +472,50 @@ def user_hops_and_runs(
     return user_factory(name).hop(bastion, backend, user_ssh_config, docstring)
 
 
+@given(
+    parsers.re(
+        r'user "?(?P<name>[\w.-]+)"? writes the sudoers file "(?P<path>[^"]+)" '
+        r'on "(?P<host>[\w.-]+)" from "(?P<bastion>[\w.-]+)"'
+    ),
+    target_fixture="connection",
+)
+def user_writes_sudoers_file(
+    name: str,
+    path: str,
+    host: str,
+    bastion: str,
+    docstring: str,
+    token: str,
+    user_factory: Callable[[str], User],
+    user_ssh_config: Path,
+) -> HopResult:
+    """Leave a root-owned file on a backend, as the step's docstring reads.
+
+    The content is staged in the temporary directory of the machine, then
+    installed with the mode sudoers expects of a drop-in; the token of the
+    portal is what sudo asks for, once.
+
+    """
+    staged = f"/tmp/{Path(path).name}"
+    script = "\n".join(
+        [
+            "umask 077",
+            f"cat > {staged} <<'CONTENT'",
+            docstring,
+            "CONTENT",
+            f"echo {token} | sudo -S install -m 0440 -o root -g root {staged} {path}",
+            f"rm -f {staged}",
+        ]
+    )
+    connection = user_factory(name).hop(bastion, host, user_ssh_config, script)
+    if not connection.succeeded:
+        pytest.fail(
+            f"{name} could not write {path} on {host}: {connection.describe()}",
+            pytrace=False,
+        )
+    return connection
+
+
 @then(
     parsers.re(r'the recording of "(?P<name>[^"]+)" on "(?P<bastion>[\w.-]+)" holds:')
 )
@@ -589,6 +636,54 @@ def user_runs_sudo_from(
 ) -> SudoResult:
     """Open a session on the bastion and try to elevate on the backend."""
     return user_factory(name).sudo_from(bastion, backend, token, user_ssh_config)
+
+
+@when(
+    parsers.re(
+        r'user "?(?P<name>[\w.-]+)"? runs with sudo on "(?P<backend>[\w.-]+)" '
+        r'from "(?P<bastion>[\w.-]+)" through SSH'
+    ),
+    target_fixture="connection",
+)
+def user_runs_with_sudo_from(
+    name: str,
+    backend: str,
+    bastion: str,
+    docstring: str,
+    user_factory: Callable[[str], User],
+    token: str,
+    user_ssh_config: Path,
+) -> SudoResult:
+    """Run the command the step carries through sudo on a backend.
+
+    The command comes as its docstring, which keeps it in the scenario; sudo
+    runs it with the one-time token of the portal, as it would ask for it.
+
+    """
+    command = docstring.strip()
+    if "\n" in command:
+        pytest.fail(
+            f"The step runs one command, not a script: {command!r}", pytrace=False
+        )
+    return user_factory(name).sudo_command_from(
+        bastion, backend, command, token, user_ssh_config
+    )
+
+
+@then("the refusal comes from the sudoers policy")
+def refusal_comes_from_the_sudoers_policy(connection: SudoResult) -> None:
+    """sudo read its policy and turned the command down before PAM was asked.
+
+    A token the fleet no longer accepts fails at the prompt and says so:
+    reading the message is what tells a command sudoers never allowed from
+    an elevation the portal refused.
+
+    """
+    if POLICY_REFUSED not in connection.output:
+        pytest.fail(
+            f"sudo did not refuse the command from its policy: {connection.describe()}",
+            pytrace=False,
+        )
 
 
 @then(parsers.parse("the result is {expected}"))

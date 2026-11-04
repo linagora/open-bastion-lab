@@ -79,50 +79,21 @@ Feature: The self-extracting installers for maximum security
     When user "rtyler" tries to connect to "bastion-1" through SSH
     Then the result is fails
 
-  Scenario Outline: Sudo on the backends follows the rules of the portal
-    Given user <name> has signed its SSH public key
-    And user <name> has a temporary token from the portal
-    When user <name> runs sudo on "backend-2" from "bastion-1" through SSH
-    Then the result is <result>
-
-    Examples:
-      | name   | result  |
-      | rtyler | success |
-      | dwho   | fails   |
-
-  Scenario: A user allowed to sudo on the backends can't sudo on the bastion
-    Given user "rtyler" has signed its SSH public key
-    And user "rtyler" has a temporary token from the portal
-    When user "rtyler" runs sudo on "bastion-1" through SSH
-    Then the result is fails
-
-  Scenario: A user whose sudo access is removed can't sudo
-    Given user "rtyler" has signed its SSH public key
-    And user "rtyler" has a temporary token from the portal
-    And the administrator set pam-access sudo rule to:
-      | backend | 0 |
-    And the portal workers reloaded the configuration
-    And the administrator drops the authorization cache of the fleet
-    When user "rtyler" runs sudo on "backend-2" from "bastion-1" through SSH
-    Then the result is fails
-
-  Scenario: A service account reach the bastion but can't sudo
-    When service account "maintainer" tries to connect to "bastion-1" through SSH
-    Then the result is success
-    When service account "maintainer" runs sudo on "bastion-1" through SSH
-    Then the result is fails
-
-  Scenario: A service account reach the backends but can't sudo
-    When service account "maintainer" tries to connect to "backend-1" through SSH
-    Then the result is success
-    When service account "maintainer" runs sudo on "backend-1" through SSH
-    Then the result is fails
-
-  Scenario: Sudo on the bastion goes through the portal
-    Then the sudo stack of "bastion-1" asks the portal
-
   Scenario: The backends only accept the bastion of the fleet
     Then the backends accept only the bastion "bastion-1"
+
+  # What the stack this deployment writes ensures — who may sudo, and that
+  # the portal alone decides it — is exercised in sudo_maximum_security.feature.
+  Scenario: Sudo on the bastion goes through the portal
+    When the administrator reads "/etc/pam.d/sudo" on "bastion-1" as a stream
+    Then a line matches the pattern
+      """
+      ^auth\s+sufficient\s+pam_openbastion\.so$
+      """
+    And a line matches the pattern
+      """
+      ^auth\s+required\s+pam_deny\.so$
+      """
 
   Scenario: A revoked certificate is refused once the list is refreshed
     Given user "msmith" has signed its SSH public key

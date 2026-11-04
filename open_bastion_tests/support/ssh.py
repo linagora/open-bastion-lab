@@ -431,6 +431,13 @@ class User:
         command = self._sudo_command(token)
         return self._sudo(bastion, backend, f"ob-ssh {backend} '{command}'", ssh_config)
 
+    def sudo_command_from(
+        self, bastion: str, backend: str, command: str, token: str, ssh_config: Path
+    ) -> SudoResult:
+        """Run one command through sudo on a backend the user reaches from a bastion."""
+        inner = f"echo {token} | sudo -S {command}"
+        return self._sudo(bastion, backend, f"ob-ssh {backend} '{inner}'", ssh_config)
+
     @staticmethod
     def _sudo_command(token: str) -> str:
         """The command that gives sudo the one-time token of the portal.

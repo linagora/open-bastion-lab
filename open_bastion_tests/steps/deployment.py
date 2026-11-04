@@ -10,13 +10,14 @@ runs before PAM and sshd. See :mod:`open_bastion_tests.support.guest_agent`.
 
 """
 
-from pytest_bdd import given, parsers, then
+from pytest_bdd import given, parsers, then, when
 
 import base64
 import difflib
 import logging
 import re
 import shlex
+from dataclasses import dataclass
 
 import pytest
 
@@ -32,7 +33,6 @@ LOGGER = logging.getLogger(__name__)
 
 # What the setup scripts write, and what the scenarios read back
 CONFIG = "/etc/open-bastion/openbastion.conf"
-SUDO_STACK = "/etc/pam.d/sudo"
 ALLOWED_BASTIONS = "/etc/open-bastion/allowed_bastions"
 BASTION_ID = "/usr/bin/ob-bastion-id"
 
@@ -53,9 +53,35 @@ CONFIGURATION = (
 )
 REVOCATION_LIST = "/etc/ssh/revoked_keys"
 
-# The sudo stack of a maximum security host asks the portal, and refuses
-# what it does not answer
-SUDO_STACK_PATTERNS = (r"pam_openbastion\.so", r"pam_deny\.so")
+
+def _matches(content: str, pattern: str) -> bool:
+    return re.search(pattern, content, re.MULTILINE) is not None
+
+
+@dataclass
+class Stream:
+    """A root-owned file of a machine, matched forward through its lines."""
+
+    path: str
+    lines: list[str]
+    position: int = 0
+
+    def match(self, pattern: str) -> bool:
+        """Whether a line at or after the cursor matches, moving past it.
+
+        Moving past the line is what has the patterns of a scenario read the
+        file in order: a line already matched is not matched again.
+
+        """
+        for index in range(self.position, len(self.lines)):
+            if _matches(self.lines[index], pattern):
+                self.position = index + 1
+                return True
+        return False
+
+    def remaining(self) -> str:
+        """What the stream has not matched yet."""
+        return "\n".join(self.lines[self.position :])
 
 
 @given(
@@ -136,21 +162,41 @@ def installer_succeeded(
         pytest.fail(installation.describe(), pytrace=False)
 
 
-@then(parsers.re(r'the sudo stack of "(?P<name>[^"]+)" asks the portal'))
-def sudo_stack_asks_the_portal(name: str, fleet: Fleet) -> None:
-    """Elevation on the host goes through the portal."""
-    machine = fleet.machine(name)
-    content = fleet.read_as_root(machine, SUDO_STACK)
-    missing = [
-        pattern for pattern in SUDO_STACK_PATTERNS if not _matches(content, pattern)
-    ]
-    if missing:
+@when(
+    parsers.re(
+        r'the administrator reads "(?P<path>[^"]+)" on "(?P<host>[\w.-]+)" as a stream'
+    ),
+    target_fixture="stream",
+)
+def administrator_reads_file(path: str, host: str, fleet: Fleet) -> Stream:
+    """What a root-owned file of a machine holds, one line at a time.
+
+    The lines are matched in the order the file has them, which is what an
+    authentication stack is about. A configured fleet hands elevation to the
+    portal, so the guest agent is what reads such a file: see
+    :mod:`open_bastion_tests.support.guest_agent`.
+
+    """
+    content = fleet.read_as_root(fleet.machine(host), path)
+    return Stream(path=path, lines=content.splitlines())
+
+
+@then("a line matches the pattern")
+def a_line_matches_the_pattern(docstring: str, stream: Stream) -> None:
+    """The next line of the file, after the one matched before, matches.
+
+    The patterns a scenario gives therefore read the file from top to
+    bottom: a stack whose lines are in another order does not match.
+
+    """
+    pattern = docstring.strip()
+    if not stream.match(pattern):
         pytest.fail(
-            f"{SUDO_STACK} of {name} does not ask the portal for sudo, it "
-            f"misses {', '.join(missing)}:\n{content}",
+            f"No line of {stream.path} matches {pattern!r} from line "
+            f"{stream.position + 1}:\n{stream.remaining()}",
             pytrace=False,
         )
-    LOGGER.info("sudo on %s asks the portal", name)
+    LOGGER.info("%s: line %s matches %s", stream.path, stream.position, pattern)
 
 
 @then(parsers.re(r'the backends accept only the bastion "(?P<bastion>[^"]+)"'))
@@ -344,7 +390,3 @@ def _difference(path: str, before: str | None, after: str | None) -> str:
         n=1,
     )
     return "".join(diff)[:2000]
-
-
-def _matches(content: str, pattern: str) -> bool:
-    return re.search(pattern, content, re.MULTILINE) is not None
