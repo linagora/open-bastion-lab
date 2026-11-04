@@ -700,7 +700,40 @@ def user_runs_with_sudo_from(
             f"The step runs one command, not a script: {command!r}", pytrace=False
         )
     return user_factory(name).sudo_command_from(
-        bastion, backend, command, token, user_ssh_config
+        bastion, backend, command, user_ssh_config, token
+    )
+
+
+@when(
+    parsers.re(
+        r'user "?(?P<name>[\w.-]+)"? runs with sudo, without a token, '
+        r'on "(?P<backend>[\w.-]+)" from "(?P<bastion>[\w.-]+)" through SSH'
+    ),
+    target_fixture="connection",
+)
+def user_runs_without_a_token(
+    name: str,
+    backend: str,
+    bastion: str,
+    docstring: str,
+    user_factory: Callable[[str], User],
+    user_ssh_config: Path,
+) -> SudoResult:
+    """Run the command of the step through sudo with nothing to give it.
+
+    sudo is told to ask nothing, so what it answers is what its own policy
+    and the PAM stack of the host decide. An elevation the user cached
+    earlier answers instead: a scenario that asks this question drops it
+    first, with a step of its own.
+
+    """
+    command = docstring.strip()
+    if "\n" in command:
+        pytest.fail(
+            f"The step runs one command, not a script: {command!r}", pytrace=False
+        )
+    return user_factory(name).sudo_command_from(
+        bastion, backend, command, user_ssh_config
     )
 
 
@@ -718,6 +751,37 @@ def refusal_comes_from_the_sudoers_policy(connection: SudoResult) -> None:
             f"sudo did not refuse the command from its policy: {connection.describe()}",
             pytrace=False,
         )
+
+
+@when(
+    parsers.re(
+        r'user "?(?P<name>[\w.-]+)"? drops its cached sudo '
+        r'on "(?P<backend>[\w.-]+)" from "(?P<bastion>[\w.-]+)" through SSH'
+    ),
+    target_fixture="connection",
+)
+def user_drops_its_cached_sudo(
+    name: str,
+    backend: str,
+    bastion: str,
+    user_factory: Callable[[str], User],
+    user_ssh_config: Path,
+) -> SudoResult:
+    """Have sudo forget the elevation the user got on the backend earlier.
+
+    sudo keeps such a timestamp for a quarter of an hour by default, and
+    arms it at every use, so a scenario that asks what sudo does without a
+    password has to drop it. It is a step of its own so the feature says it.
+
+    """
+    connection = user_factory(name).drop_sudo_cache(bastion, backend, user_ssh_config)
+    if not connection.succeeded:
+        pytest.fail(
+            f"{name} could not drop its cached sudo on {backend}: "
+            f"{connection.describe()}",
+            pytrace=False,
+        )
+    return connection
 
 
 @then("the refusal comes from the password stage")

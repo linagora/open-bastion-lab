@@ -432,11 +432,31 @@ class User:
         return self._sudo(bastion, backend, f"ob-ssh {backend} '{command}'", ssh_config)
 
     def sudo_command_from(
-        self, bastion: str, backend: str, command: str, token: str, ssh_config: Path
+        self,
+        bastion: str,
+        backend: str,
+        command: str,
+        ssh_config: Path,
+        token: str | None = None,
     ) -> SudoResult:
-        """Run one command through sudo on a backend the user reaches from a bastion."""
-        inner = f"echo {token} | sudo -S {command}"
+        """Run one command through sudo on a backend the user reaches from a bastion.
+
+        With a token, sudo is given it as the password it asks for. Without
+        one, sudo is told to ask nothing: what it answers then is the answer,
+        not a prompt.
+
+        """
+        if token is None:
+            inner = f"sudo -n {command}"
+        else:
+            inner = f"echo {token} | sudo -S {command}"
         return self._sudo(bastion, backend, f"ob-ssh {backend} '{inner}'", ssh_config)
+
+    def drop_sudo_cache(
+        self, bastion: str, backend: str, ssh_config: Path
+    ) -> SudoResult:
+        """Have sudo forget the elevation the user got on a backend earlier."""
+        return self._sudo(bastion, backend, f"ob-ssh {backend} 'sudo -k'", ssh_config)
 
     @staticmethod
     def _sudo_command(token: str) -> str:

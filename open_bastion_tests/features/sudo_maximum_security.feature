@@ -24,6 +24,35 @@ Feature: Sudo under maximum security
       | rtyler | success |
       | dwho   | fails   |
 
+  Scenario: A NOPASSWD drop-in does not let sudo skip the portal
+    Given user "rtyler" has signed its SSH public key
+    And user "rtyler" has a temporary token from the portal
+    And user "rtyler" writes the sudoers file "/etc/sudoers.d/zz-msmith" on "backend-2" from "bastion-1"
+      """
+      msmith ALL=(root) NOPASSWD: /usr/bin/id
+      """
+    Given user "msmith" has signed its SSH public key
+    And user "msmith" has a temporary token from the portal
+    When user "msmith" runs with sudo on "backend-2" from "bastion-1" through SSH
+      """
+      id
+      """
+    Then the result is fails
+
+  Scenario: A NOPASSWD drop-in drops the token prompt
+    Given user "rtyler" has signed its SSH public key
+    And user "rtyler" has a temporary token from the portal
+    And user "rtyler" writes the sudoers file "/etc/sudoers.d/zz-rtyler" on "backend-2" from "bastion-1"
+      """
+      rtyler ALL=(root) NOPASSWD: ALL
+      """
+    When user "rtyler" drops its cached sudo on "backend-2" from "bastion-1" through SSH
+    When user "rtyler" runs with sudo, without a token, on "backend-2" from "bastion-1" through SSH
+      """
+      id
+      """
+    Then the result is success
+
   Scenario: An SSO user privileges can be limited
     Given user "rtyler" has signed its SSH public key
     And user "rtyler" has a temporary token from the portal

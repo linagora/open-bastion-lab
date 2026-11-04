@@ -10,6 +10,16 @@ def test_sudo_on_backends() -> None:
     pass
 
 
+@scenario(FEATURE, "A NOPASSWD drop-in does not let sudo skip the portal")
+def test_nopasswd_drop_in() -> None:
+    pass
+
+
+@scenario(FEATURE, "A NOPASSWD drop-in drops the token prompt")
+def test_nopasswd_without_a_token() -> None:
+    pass
+
+
 @scenario(FEATURE, "An SSO user privileges can be limited")
 def test_sudoers_drop_in() -> None:
     pass
