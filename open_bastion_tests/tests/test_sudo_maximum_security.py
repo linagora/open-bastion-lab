@@ -33,3 +33,8 @@ def test_service_account_on_bastion() -> None:
 @scenario(FEATURE, "A service account reach the backends but can't sudo")
 def test_service_account_on_backends() -> None:
     pass
+
+
+@scenario(FEATURE, "A service account added to the sudo group still can't sudo")
+def test_service_account_in_the_sudo_group() -> None:
+    pass

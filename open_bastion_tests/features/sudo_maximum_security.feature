@@ -78,3 +78,9 @@ Feature: Sudo under maximum security
     Then the result is success
     When service account "maintainer" runs sudo on "backend-1" through SSH
     Then the result is fails
+
+  Scenario: A service account added to the sudo group still can't sudo
+    Given the administrator added "maintainer" to the group "open-bastion-sudo" of "backend-1"
+    When service account "maintainer" runs sudo on "backend-1" through SSH
+    Then the result is fails
+    And the refusal comes from the password stage

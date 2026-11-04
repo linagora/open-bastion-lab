@@ -37,6 +37,9 @@ SESSIONS = "/var/lib/open-bastion/sessions"
 # What sudo prints when its policy has no entry for the command it was given.
 POLICY_REFUSED = "is not allowed to execute"
 
+# What sudo prints when it has nothing to authenticate a user with.
+PASSWORD_REQUIRED = "a password is required"
+
 
 @given(parsers.re(r'the fleet "(?P<name>[^"]+)" is ready'), target_fixture="fleet")
 def fleet_is_ready(name: str, labs: Labs, request: pytest.FixtureRequest) -> Fleet:
@@ -387,6 +390,37 @@ def service_account_connects(
     return service_account(name).connect(fleet.machine(host))
 
 
+@given(
+    parsers.re(
+        r'the administrator added "(?P<name>[^"]+)" to the group "(?P<group>[^"]+)" '
+        r'of "(?P<host>[\w.-]+)"'
+    )
+)
+def administrator_adds_to_the_group(
+    name: str, group: str, host: str, fleet: Fleet
+) -> None:
+    """Add a local account to a group of a machine, as an administrator would.
+
+    A configured fleet has no sudo left for a local account, so the guest
+    agent is what runs usermod; the group the account landed in is read back,
+    because it is the grant the scenario talks about.
+
+    """
+    machine = fleet.machine(host)
+    added = fleet.run_as_root(machine, f"usermod -aG {group} {name}")
+    if not added.succeeded:
+        pytest.fail(
+            f"Could not add {name} to {group} on {host}: {added.describe()}",
+            pytrace=False,
+        )
+    listing = fleet.run_as_root(machine, f"getent group {group}").stdout.strip()
+    members = [member.strip() for member in listing.rsplit(":", 1)[-1].split(",")]
+    if name not in members:
+        pytest.fail(
+            f"{group} on {host} does not list {name}: {listing!r}", pytrace=False
+        )
+
+
 @when(
     parsers.re(
         r'service account "(?P<name>[^"]+)" runs sudo on "(?P<host>[\w.-]+)" '
@@ -682,6 +716,22 @@ def refusal_comes_from_the_sudoers_policy(connection: SudoResult) -> None:
     if POLICY_REFUSED not in connection.output:
         pytest.fail(
             f"sudo did not refuse the command from its policy: {connection.describe()}",
+            pytrace=False,
+        )
+
+
+@then("the refusal comes from the password stage")
+def refusal_comes_from_the_password_stage(connection: SudoResult) -> None:
+    """sudo had nothing to authenticate the user with, and said so.
+
+    The command the user asked for is granted — the group the sudoers rule
+    names holds it — so the elevation reached the PAM stack and stopped
+    there: only the portal can hand sudo what it asks for.
+
+    """
+    if PASSWORD_REQUIRED not in connection.output:
+        pytest.fail(
+            f"sudo did not fail on its password stage: {connection.describe()}",
             pytrace=False,
         )
 
