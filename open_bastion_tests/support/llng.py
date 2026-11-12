@@ -355,7 +355,15 @@ class Llng:
 
     def pam_ssh_rules(self) -> dict[str, str]:
         """SSH access rules of the portal, per server group."""
-        result = self._exec("lemonldap-ng-cli", "-json", "get", "pamAccessSshRules")
+        return self._pam_rules("pamAccessSshRules")
+
+    def pam_sudo_rules(self) -> dict[str, str]:
+        """Sudo rules of the portal, per server group."""
+        return self._pam_rules("pamAccessSudoRules")
+
+    def _pam_rules(self, key: str) -> dict[str, str]:
+        """What the portal holds for one rule set, per server group."""
+        result = self._exec("lemonldap-ng-cli", "-json", "get", key)
         start = result.stdout.find("{")
         if start < 0:
             raise LlngError(f"No rules in {result.stdout!r}{result.stderr!r}")

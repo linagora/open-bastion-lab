@@ -30,6 +30,11 @@ def test_sudo_on_bastion() -> None:
     pass
 
 
+@scenario(FEATURE, "A user the portal allows elevates on the bastion")
+def test_sudo_allowed_on_bastion() -> None:
+    pass
+
+
 @scenario(FEATURE, "A user whose sudo access is removed can't sudo")
 def test_sudo_removed() -> None:
     pass

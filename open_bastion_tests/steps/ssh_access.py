@@ -1,5 +1,6 @@
 """Steps related to SSH access."""
 
+import re
 from collections.abc import Callable
 from pathlib import Path
 
@@ -36,6 +37,9 @@ SESSIONS = "/var/lib/open-bastion/sessions"
 
 # What sudo prints when its policy has no entry for the command it was given.
 POLICY_REFUSED = "is not allowed to execute"
+
+# A line of the rules a step declares: the server group, then the expression.
+RULE_LINE = re.compile(r"^(?P<group>[\w.-]+)\s*:\s*(?P<rule>.+)$")
 
 # What sudo prints when it has nothing to authenticate a user with.
 PASSWORD_REQUIRED = "a password is required"
@@ -284,6 +288,53 @@ def administrator_sets_pam_access_sudo_rule(
     """
     rules = {group: rule for group, rule in datatable}
     llng.set_pam_sudo_rules(rules)
+
+
+@then("the pam-access ssh rules are")
+def pam_access_ssh_rules_are(docstring: str, llng: Llng) -> None:
+    """The portal decides who may reach each server group, as the step says.
+
+    One line per group, "group: rule", the rule being the expression the
+    portal evaluates. A feature states them in its Background so a reader
+    has what its scenarios rest on in front of it, and a portal that drifted
+    fails here rather than in a scenario that happens to need a rule.
+
+    """
+    _rules_are("ssh", docstring, llng.pam_ssh_rules())
+
+
+@then("the pam-access sudo rules are")
+def pam_access_sudo_rules_are(docstring: str, llng: Llng) -> None:
+    """The portal decides who may elevate on each server group, as the step says.
+
+    Same as the SSH rules: the lines are the ones the scenarios rest on.
+
+    """
+    _rules_are("sudo", docstring, llng.pam_sudo_rules())
+
+
+def _rules_are(kind: str, docstring: str, actual: dict[str, str]) -> None:
+    """The rules of the portal are the ones the step declares."""
+    declared: dict[str, str] = {}
+    for line in docstring.splitlines():
+        if not line.strip():
+            continue
+        match = RULE_LINE.match(line.strip())
+        if match is None:
+            pytest.fail(f"The step reads 'group: rule', not {line!r}", pytrace=False)
+        declared[match["group"]] = match["rule"]
+
+    drifted = [
+        f"{group} is {actual.get(group)!r} instead of {rule!r}"
+        for group, rule in declared.items()
+        if actual.get(group) != rule
+    ]
+    if drifted:
+        pytest.fail(
+            f"The {kind} rules of the portal are not the ones the feature "
+            "declares: " + "; ".join(drifted),
+            pytrace=False,
+        )
 
 
 @given("the portal workers reloaded the configuration")
@@ -782,6 +833,34 @@ def user_drops_its_cached_sudo(
             pytrace=False,
         )
     return connection
+
+
+@when(
+    parsers.re(
+        r'user "?(?P<name>[\w.-]+)"? runs with sudo on "(?P<host>[\w.-]+)" through SSH'
+    ),
+    target_fixture="connection",
+)
+def user_runs_with_sudo(
+    name: str,
+    host: str,
+    docstring: str,
+    user_factory: Callable[[str], User],
+    token: str,
+    user_ssh_config: Path,
+) -> SudoResult:
+    """Run the command the step carries through sudo on the machine it names.
+
+    The machine is the one the user connects to, not one reached from a
+    bastion: the bastion of the fleet is such a machine.
+
+    """
+    command = docstring.strip()
+    if "\n" in command:
+        pytest.fail(
+            f"The step runs one command, not a script: {command!r}", pytrace=False
+        )
+    return user_factory(name).sudo_command(host, command, token, user_ssh_config)
 
 
 @then("the refusal comes from the password stage")

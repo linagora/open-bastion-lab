@@ -24,6 +24,16 @@ Feature: The self-extracting installers for maximum security
     And the administrator runs the installer on "backend-2"
     And the administrator approves the enrolment of "backend-2"
     And the installer of "backend-2" succeeded
+    Then the pam-access ssh rules are
+      """
+      bastion: $uid eq "dwho" or $uid eq "rtyler" or $uid eq "msmith"
+      backend: $uid eq "dwho" or $uid eq "rtyler" or $uid eq "msmith"
+      """
+    And the pam-access sudo rules are
+      """
+      backend: $uid eq "rtyler"
+      bastion: 0
+      """
 
   Scenario Outline: Users known to the portal reach the bastion
     Given user <name> has signed its SSH public key

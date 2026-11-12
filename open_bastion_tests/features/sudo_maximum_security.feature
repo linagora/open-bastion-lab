@@ -12,6 +12,11 @@ Feature: Sudo under maximum security
     And the LLNG configuration is "lmConf-with-plugins-configured"
     And the administrator generates the playbook with the "ob-builder-max-security" configuration
     And the administrator plays the generated playbook against the fleet
+    Then the pam-access sudo rules are
+      """
+      backend: $uid eq "rtyler"
+      bastion: 0
+      """
 
   Scenario Outline: Sudo on the backends follows the rules of the portal
     Given user <name> has signed its SSH public key
@@ -85,6 +90,19 @@ Feature: Sudo under maximum security
     And user "rtyler" has a temporary token from the portal
     When user "rtyler" runs sudo on "bastion-1" through SSH
     Then the result is fails
+
+  Scenario: A user the portal allows elevates on the bastion
+    Given user "rtyler" has signed its SSH public key
+    And user "rtyler" has a temporary token from the portal
+    And the administrator set pam-access sudo rule to:
+      | bastion | $uid eq "rtyler" |
+    And the portal workers reloaded the configuration
+    And the administrator drops the authorization cache of the fleet
+    When user "rtyler" runs with sudo on "bastion-1" through SSH
+      """
+      id
+      """
+    Then the result is success
 
   Scenario: A user whose sudo access is removed can't sudo
     Given user "rtyler" has signed its SSH public key
