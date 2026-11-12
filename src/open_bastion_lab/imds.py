@@ -14,7 +14,7 @@ from aiohttp import web
 import yaml
 
 from open_bastion_lab.config import Config
-from open_bastion_lab.machine import ip_by_name, mac_by_name
+from open_bastion_lab.virt import ip_by_name, mac_by_name
 
 LOGGER = logging.getLogger(__name__)
 
