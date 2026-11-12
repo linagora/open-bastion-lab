@@ -104,8 +104,8 @@ echo "==> Regenerating the APT index"
 versions=$(for deb in "$OB_LAB_DIR"/open-bastion_0.*_amd64.deb; do
     dpkg-deb -f "$deb" Version
 done | sort -u)
-echo "==> Served open-bastion: $(printf '%s ' $versions)"
-if [ "$(printf '%s\n' $versions | wc -l)" -gt 1 ]; then
+echo "==> Served open-bastion: $(printf '%s ' "${versions}")"
+if [ "$(printf '%s\n' "$versions" | wc -l)" -gt 1 ]; then
     echo "!! Several versions are served; remove the ones you do not want"
 fi
 
