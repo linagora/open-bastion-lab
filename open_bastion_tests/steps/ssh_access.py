@@ -24,6 +24,7 @@ from open_bastion_tests.support.deployment import (
     llng_configuration,
 )
 from open_bastion_tests.support.ssh import (
+    AUTHENTICATION_REFUSED,
     ChannelResult,
     Connection,
     FORWARDING_REFUSED,
@@ -42,6 +43,13 @@ SERVICE_ROOT = "/srv/ob-lab-forwarding"
 
 # What sudo prints when its policy has no entry for the command it was given.
 POLICY_REFUSED = "is not allowed to execute"
+
+# What ssh prints when sshd closed a connection whose key it had accepted:
+# the machine it reached, or UNKNOWN when it never reached one.
+ACCOUNT_REFUSED = re.compile(r"Connection closed by (?!UNKNOWN)")
+
+# What sudo prints when its account stage refuses the elevation.
+ACCOUNT_MANAGEMENT_ERROR = "PAM account management error"
 
 # A line of the rules a step declares: the server group, then the expression.
 RULE_LINE = re.compile(r"^(?P<group>[\w.-]+)\s*:\s*(?P<rule>.+)$")
@@ -1088,6 +1096,59 @@ def refusal_comes_from_the_forwarding_policy(connection: ChannelResult) -> None:
         pytest.fail(
             f"sshd did not refuse the channel from its forwarding policy: "
             f"{connection.describe()}",
+            pytrace=False,
+        )
+
+
+@then("the refusal comes from the key check")
+def refusal_comes_from_the_key_check(connection: SshResult) -> None:
+    """sshd turned down the key it was offered.
+
+    A bare key where the machine accepts certificates only, or a
+    certificate its revocation list holds, fails at the public key stage:
+    the message names the method, and the reader learns the refusal was
+    the key and not the account behind it.
+
+    """
+    marker = f"{AUTHENTICATION_REFUSED} (publickey)"
+    if marker not in connection.output:
+        pytest.fail(
+            f"sshd did not refuse the key: {connection.describe()}", pytrace=False
+        )
+
+
+@then("the refusal comes from the account stage")
+def refusal_comes_from_the_account_stage(
+    connection: HopResult | SshResult,
+) -> None:
+    """The key was accepted, and the machine closed the session.
+
+    sshd closes the connection when its account phase refuses the user —
+    the rule the portal answered, or the cache it could not reach — after
+    the certificate was taken. The address is what tells that refusal from
+    a host key the client turned down, which ssh reports as a closed
+    connection too, with UNKNOWN for the machine it never reached.
+
+    """
+    if ACCOUNT_REFUSED.search(connection.output) is None:
+        pytest.fail(
+            f"The machine did not refuse the account: {connection.describe()}",
+            pytrace=False,
+        )
+
+
+@then("the refusal comes from the portal")
+def refusal_comes_from_the_portal(connection: SudoResult) -> None:
+    """sudo reached its account stage, and the stack there turned it down.
+
+    It is the answer the portal gave, not a token that failed and not a
+    sudoers rule: sudo says so itself, and a token it could not use fails
+    at the password stage instead.
+
+    """
+    if ACCOUNT_MANAGEMENT_ERROR not in connection.output:
+        pytest.fail(
+            f"sudo did not fail on its account stage: {connection.describe()}",
             pytrace=False,
         )
 

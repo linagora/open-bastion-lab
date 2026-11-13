@@ -63,6 +63,7 @@ Feature: The self-extracting installers for maximum security
     # its accounts.
     When user "pshark" tries to connect to "bastion-1" through SSH
     Then the result is fails
+    And the refusal comes from the key check
 
   Scenario: Non-SSO users can't access the backend
     # pshark copied its key before the machines are configured, while
@@ -70,6 +71,7 @@ Feature: The self-extracting installers for maximum security
     # its accounts.
     When user "pshark" tries to connect to "backend-2" through SSH
     Then the result is fails
+    And the refusal comes from the key check
 
   Scenario: An SSO user whose access to the backends is removed can't hop
     Given user "msmith" has signed its SSH public key
@@ -79,6 +81,7 @@ Feature: The self-extracting installers for maximum security
     And the administrator drops the authorization cache of the fleet
     When user "msmith" hops from "bastion-1" to "backend-2" through SSH
     Then the result is fails
+    And the refusal comes from the account stage
 
   Scenario: An SSO user whose access is removed can't reach the bastion
     Given user "rtyler" has signed its SSH public key
@@ -88,6 +91,7 @@ Feature: The self-extracting installers for maximum security
     And the administrator drops the authorization cache of the fleet
     When user "rtyler" tries to connect to "bastion-1" through SSH
     Then the result is fails
+    And the refusal comes from the account stage
 
   Scenario: The backends only accept the bastion of the fleet
     Then the backends accept only the bastion "bastion-1"
@@ -120,6 +124,7 @@ Feature: The self-extracting installers for maximum security
     Then the result is success
     When user "msmith" tries to connect to "bastion-1" through SSH
     Then the result is fails
+    And the refusal comes from the key check
     Given user "msmith" has signed its SSH public key
     When user "msmith" tries to connect to "bastion-1" through SSH
     # no refresh needed that time, thanks to use of serials in KRL
@@ -155,3 +160,4 @@ Feature: The self-extracting installers for maximum security
     When the authorization of "rtyler" is removed from "bastion-1"
     When user "rtyler" tries to connect to "bastion-1" through SSH
     Then the result is fails
+    And the refusal comes from the account stage
