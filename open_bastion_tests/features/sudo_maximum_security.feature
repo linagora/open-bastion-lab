@@ -58,7 +58,7 @@ Feature: Sudo under maximum security
       """
     Then the result is success
 
-  Scenario: An SSO user privileges can be limited
+  Scenario: An SSO user's privileges can be limited
     Given user "rtyler" has signed its SSH public key
     And user "rtyler" has a temporary token from the portal
     And user "rtyler" writes the sudoers file "/etc/sudoers.d/zz-dwho" on "backend-2" from "bastion-1"
@@ -85,13 +85,13 @@ Feature: Sudo under maximum security
     Then the result is fails
     And the refusal comes from the sudoers policy
 
-  Scenario: A user allowed to sudo on the backends can't sudo on the bastion
+  Scenario: An SSO user allowed to sudo on the backends can't sudo on the bastion
     Given user "rtyler" has signed its SSH public key
     And user "rtyler" has a temporary token from the portal
     When user "rtyler" runs sudo on "bastion-1" through SSH
     Then the result is fails
 
-  Scenario: A user the portal allows elevates on the bastion
+  Scenario: An SSO user the portal allows elevates on the bastion
     Given user "rtyler" has signed its SSH public key
     And user "rtyler" has a temporary token from the portal
     And the administrator set pam-access sudo rule to:
@@ -104,7 +104,7 @@ Feature: Sudo under maximum security
       """
     Then the result is success
 
-  Scenario: A user whose sudo access is removed can't sudo
+  Scenario: An SSO user whose sudo access is removed can't sudo
     Given user "rtyler" has signed its SSH public key
     And user "rtyler" has a temporary token from the portal
     And the administrator set pam-access sudo rule to:

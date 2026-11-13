@@ -23,32 +23,32 @@ def deployment(module_dir: Path) -> InstallerBasedDeployment:
     return InstallerBasedDeployment(module_dir)
 
 
-@scenario(FEATURE, "Users known to the portal reach the bastion")
+@scenario(FEATURE, "SSO users reach the bastion")
 def test_bastion_access() -> None:
     pass
 
 
-@scenario(FEATURE, "Users known to the portal reach the backend through a bastion")
+@scenario(FEATURE, "SSO users reach the backend through a bastion")
 def test_backend_access() -> None:
     pass
 
 
-@scenario(FEATURE, "Users not known to the portal can't access the bastion")
+@scenario(FEATURE, "Non-SSO users can't access the bastion")
 def test_local_account() -> None:
     pass
 
 
-@scenario(FEATURE, "Users not known to the portal can't access the backend")
+@scenario(FEATURE, "Non-SSO users can't access the backend")
 def test_local_account_on_backend() -> None:
     pass
 
 
-@scenario(FEATURE, "A user whose access to the backends is removed can't hop")
+@scenario(FEATURE, "An SSO user whose access to the backends is removed can't hop")
 def test_backend_access_removed() -> None:
     pass
 
 
-@scenario(FEATURE, "A user whose access is removed can't reach the bastion")
+@scenario(FEATURE, "An SSO user whose access is removed can't reach the bastion")
 def test_bastion_access_removed() -> None:
     pass
 
@@ -68,11 +68,11 @@ def test_revoked_certificate() -> None:
     pass
 
 
-@scenario(FEATURE, "The bastion records what a user does on a backend")
+@scenario(FEATURE, "The bastion records what an SSO user does on a backend")
 def test_session_recording() -> None:
     pass
 
 
-@scenario(FEATURE, "The cache keeps a user's access while the portal is down")
+@scenario(FEATURE, "The cache keeps an SSO user's access while the portal is down")
 def test_cache_while_portal_down() -> None:
     pass

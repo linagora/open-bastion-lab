@@ -35,7 +35,7 @@ Feature: The self-extracting installers for maximum security
       bastion: 0
       """
 
-  Scenario Outline: Users known to the portal reach the bastion
+  Scenario Outline: SSO users reach the bastion
     Given user <name> has signed its SSH public key
     When user <name> tries to connect to "bastion-1" through SSH
     Then the result is <result>
@@ -46,7 +46,7 @@ Feature: The self-extracting installers for maximum security
       | rtyler | success |
       | msmith | success |
 
-  Scenario Outline: Users known to the portal reach the backend through a bastion
+  Scenario Outline: SSO users reach the backend through a bastion
     Given user <name> has signed its SSH public key
     When user <name> hops from "bastion-1" to "backend-2" through SSH
     Then the result is <result>
@@ -57,21 +57,21 @@ Feature: The self-extracting installers for maximum security
       | rtyler | success |
       | msmith | success |
 
-  Scenario: Users not known to the portal can't access the bastion
+  Scenario: Non-SSO users can't access the bastion
     # pshark copied its key before the machines are configured, while
     # it can still log in with the trivial password the fleet gives
     # its accounts.
     When user "pshark" tries to connect to "bastion-1" through SSH
     Then the result is fails
 
-  Scenario: Users not known to the portal can't access the backend
+  Scenario: Non-SSO users can't access the backend
     # pshark copied its key before the machines are configured, while
     # it can still log in with the trivial password the fleet gives
     # its accounts.
     When user "pshark" tries to connect to "backend-2" through SSH
     Then the result is fails
 
-  Scenario: A user whose access to the backends is removed can't hop
+  Scenario: An SSO user whose access to the backends is removed can't hop
     Given user "msmith" has signed its SSH public key
     And the administrator set pam-access SSH rule to:
       | backend | $uid eq "dwho" or $uid eq "rtyler" |
@@ -80,7 +80,7 @@ Feature: The self-extracting installers for maximum security
     When user "msmith" hops from "bastion-1" to "backend-2" through SSH
     Then the result is fails
 
-  Scenario: A user whose access is removed can't reach the bastion
+  Scenario: An SSO user whose access is removed can't reach the bastion
     Given user "rtyler" has signed its SSH public key
     And the administrator set pam-access SSH rule to:
       | bastion | $uid eq "dwho" or $uid eq "msmith" |
@@ -125,7 +125,7 @@ Feature: The self-extracting installers for maximum security
     # no refresh needed that time, thanks to use of serials in KRL
     Then the result is success
 
-  Scenario: The bastion records what a user does on a backend
+  Scenario: The bastion records what an SSO user does on a backend
     Given user "msmith" has signed its SSH public key
     When user "msmith" hops from "bastion-1" to "backend-1" through SSH and runs
       """
@@ -139,7 +139,7 @@ Feature: The self-extracting installers for maximum security
       | output-42       |
       | nohup-attempted |
 
-  Scenario: The cache keeps a user's access while the portal is down
+  Scenario: The cache keeps an SSO user's access while the portal is down
     Given user "rtyler" has signed its SSH public key
     When user "rtyler" tries to connect to "bastion-1" through SSH
     Then the result is success

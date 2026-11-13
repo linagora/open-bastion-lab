@@ -20,22 +20,24 @@ def test_nopasswd_without_a_token() -> None:
     pass
 
 
-@scenario(FEATURE, "An SSO user privileges can be limited")
+@scenario(FEATURE, "An SSO user's privileges can be limited")
 def test_sudoers_drop_in() -> None:
     pass
 
 
-@scenario(FEATURE, "A user allowed to sudo on the backends can't sudo on the bastion")
+@scenario(
+    FEATURE, "An SSO user allowed to sudo on the backends can't sudo on the bastion"
+)
 def test_sudo_on_bastion() -> None:
     pass
 
 
-@scenario(FEATURE, "A user the portal allows elevates on the bastion")
+@scenario(FEATURE, "An SSO user the portal allows elevates on the bastion")
 def test_sudo_allowed_on_bastion() -> None:
     pass
 
 
-@scenario(FEATURE, "A user whose sudo access is removed can't sudo")
+@scenario(FEATURE, "An SSO user whose sudo access is removed can't sudo")
 def test_sudo_removed() -> None:
     pass
 
