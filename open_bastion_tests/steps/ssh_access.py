@@ -1,6 +1,7 @@
 """Steps related to SSH access."""
 
 import re
+import shlex
 from collections.abc import Callable
 from pathlib import Path
 
@@ -23,7 +24,9 @@ from open_bastion_tests.support.deployment import (
     llng_configuration,
 )
 from open_bastion_tests.support.ssh import (
+    ChannelResult,
     Connection,
+    FORWARDING_REFUSED,
     HopResult,
     ServiceAccount,
     SshResult,
@@ -34,6 +37,8 @@ from open_bastion_tests.support.ssh import (
 
 CA_KEY = "/etc/ssh/open-bastion_ca.pub"
 SESSIONS = "/var/lib/open-bastion/sessions"
+# What the service a channel forwards to serves, and what it is started from.
+SERVICE_ROOT = "/srv/ob-lab-forwarding"
 
 # What sudo prints when its policy has no entry for the command it was given.
 POLICY_REFUSED = "is not allowed to execute"
@@ -875,6 +880,214 @@ def refusal_comes_from_the_password_stage(connection: SudoResult) -> None:
     if PASSWORD_REQUIRED not in connection.output:
         pytest.fail(
             f"sudo did not fail on its password stage: {connection.describe()}",
+            pytrace=False,
+        )
+
+
+@given(
+    parsers.re(
+        r'the administrator serves "(?P<answer>[^"]+)" on port "(?P<port>\d+)" '
+        r'of "(?P<host>[\w.-]+)"'
+    )
+)
+def administrator_serves(answer: str, port: str, host: str, fleet: Fleet) -> None:
+    """A page answers on a port of a machine, for the channels to reach.
+
+    It stands for the service a user reaches behind the bastion: the
+    channel forwards any port the user names, and what listens there is
+    their business. It is started once, so the scenarios that open a
+    channel to it share it rather than starting a second one.
+
+    """
+    machine = fleet.machine(host)
+    unit = f"ob-lab-forwarding-{port}"
+    # The address the bastion will dial, so that a service bound to the
+    # loopback alone does not pass for one the channel can reach.
+    ready = (
+        "/usr/bin/python3 -c 'import socket, sys; "
+        "s = socket.socket(socket.AF_INET); s.settimeout(1); "
+        f'sys.exit(0 if s.connect_ex(("{machine.ip}", {port})) == 0 else 1)\''
+    )
+    script = "\n".join(
+        [
+            f"mkdir -p {SERVICE_ROOT}",
+            f"printf '%s\\n' {shlex.quote(answer)} > {SERVICE_ROOT}/index.html",
+            f"systemctl is-active --quiet {unit} && exit 0",
+            f"systemd-run --unit={unit} --collect /usr/bin/python3 -m http.server"
+            f" {port} --bind 0.0.0.0 --directory {SERVICE_ROOT}",
+            f"for _ in $(seq 1 30); do {ready} && exit 0; sleep 1; done",
+            f"echo 'nothing answers on port {port} of {host}'; exit 1",
+        ]
+    )
+    result = fleet.run_as_root(machine, script)
+    if not result.succeeded:
+        pytest.fail(
+            f"Could not serve {answer!r} on port {port} of {host}: "
+            f"{result.describe()}",
+            pytrace=False,
+        )
+
+
+@when(
+    parsers.re(
+        r'user "?(?P<name>[\w.-]+)"? forwards port "(?P<port>\d+)" of '
+        r'"(?P<target>[\w.-]+)" through "(?P<bastion>[\w.-]+)"'
+    ),
+    target_fixture="connection",
+)
+def user_forwards(
+    name: str,
+    port: str,
+    target: str,
+    bastion: str,
+    fleet: Fleet,
+    user_factory: Callable[[str], User],
+    user_ssh_config: Path,
+) -> ChannelResult:
+    """Reach a port of a machine through a channel the bastion opens.
+
+    The channel is the one ``ssh -L`` forwards a local port through, and
+    the one ProxyJump rides: the bastion dials the port and relays, so it
+    reaches whatever the bastion can reach. One request is written
+    through it, and what comes back is the answer of the service it lands
+    on.
+
+    The target is dialled by the address the lab gives the machine: it is
+    the bastion that resolves a name in the channel, and what the hosts
+    of the fleet answer for each other is not what the scenario is about.
+
+    """
+    address = fleet.machine(target).ip
+    return user_factory(name).forward(
+        bastion, address, int(port), user_ssh_config, "GET / HTTP/1.0\r\n\r\n"
+    )
+
+
+@then(parsers.re(r'the forwarded port answers "(?P<answer>[^"]+)"'))
+def forwarded_port_answers(answer: str, connection: ChannelResult) -> None:
+    """The service behind the bastion answered through the channel."""
+    if answer not in connection.stdout:
+        pytest.fail(
+            f"The forwarded port did not answer {answer!r}: {connection.describe()}",
+            pytrace=False,
+        )
+
+
+@then(parsers.re(r'"(?P<bastion>[\w.-]+)" holds no recording of "(?P<name>[^"]+)"'))
+def bastion_holds_no_recording(bastion: str, name: str, fleet: Fleet) -> None:
+    """The bastion kept nothing of what the channel carried.
+
+    Recording is what the bastion does with a session, and a forwarded
+    channel is not one: what it relayed leaves no trace on the machine
+    the user is authenticated to.
+
+    """
+    machine = fleet.machine(bastion)
+    result = fleet.run_as_root(
+        machine, f"ls -A {SESSIONS}/{name} 2>/dev/null; echo END"
+    )
+    kept = [
+        line for line in result.stdout.splitlines() if line.strip() and line != "END"
+    ]
+    if not result.succeeded or kept:
+        pytest.fail(
+            f"{bastion} kept something of {name}: {kept or result.describe()}",
+            pytrace=False,
+        )
+
+
+@when(
+    parsers.re(
+        r'user "?(?P<name>[\w.-]+)"? tries to connect to "(?P<backend>[^"]+)" '
+        r'through "(?P<bastion>[\w.-]+)" with SSH ProxyJump'
+    ),
+    target_fixture="connection",
+)
+def user_connects_with_proxy_jump(
+    name: str,
+    backend: str,
+    bastion: str,
+    user_factory: Callable[[str], User],
+    user_ssh_config: Path,
+) -> SshResult:
+    """Reach a backend by ProxyJump, the way a user would without ob-ssh.
+
+    The bastion relays the connection and nothing more: the certificate
+    the client presents to the backend is the user's own, and a backend
+    accepts a certificate only when a bastion vouched for it.
+
+    """
+    return user_factory(name).proxy_jump(bastion, backend, user_ssh_config)
+
+
+@then(
+    parsers.re(r'"(?P<backend>[\w.-]+)" refused the certificate of "(?P<name>[^"]+)"')
+)
+def backend_refused_the_certificate(
+    backend: str, name: str, connection: SshResult, fleet: Fleet
+) -> None:
+    """The backend turned the certificate down, the bastion having accepted it.
+
+    The hop reaches the backend and offers it the very certificate the
+    bastion took. A backend accepts a certificate only when a bastion
+    vouched for it, so the refusal names the machine the hop was for — and
+    not the transport, nor the host key of a machine on the way, which
+    would leave the scenario passing on a hop that never got there.
+
+    ssh names that machine as it reached it: the address when the
+    connection went through a jump host, the name it was given when it did
+    not.
+
+    """
+    refused = [
+        f"{name}@{host}: Permission denied"
+        for host in (backend, fleet.machine(backend).ip)
+    ]
+    if not any(marker in connection.output for marker in refused):
+        pytest.fail(
+            f"{backend} did not refuse the certificate of {name}: "
+            f"{connection.describe()}",
+            pytrace=False,
+        )
+
+
+@given(parsers.re(r'the administrator closes TCP forwarding on "(?P<host>[\w.-]+)"'))
+def administrator_closes_tcp_forwarding(host: str, fleet: Fleet) -> None:
+    """Stop a machine from opening forwarded channels.
+
+    sshd permits TCP forwarding by default and the deployment leaves it
+    there, so this is the drop-in the study's remediation is about. It is
+    left in place: the scenario asking about the refusal is the last of
+    its feature, and the machines are restored before the next one.
+
+    """
+    machine = fleet.machine(host)
+    drop_in = "/etc/ssh/sshd_config.d/99-ob-lab-no-forwarding.conf"
+    result = fleet.run_as_root(
+        machine,
+        f"printf '%s\\n' 'AllowTcpForwarding no' > {drop_in}\nsystemctl restart sshd",
+    )
+    if not result.succeeded:
+        pytest.fail(
+            f"Could not close TCP forwarding on {host}: {result.describe()}",
+            pytrace=False,
+        )
+
+
+@then("the refusal comes from the forwarding policy")
+def refusal_comes_from_the_forwarding_policy(connection: ChannelResult) -> None:
+    """sshd turned the channel down instead of a machine behind it.
+
+    What sshd answers a client asking for a channel it does not forward is
+    "administratively prohibited": the bastion never dialled the target,
+    so the refusal is the policy that was just applied to it and not the
+    fleet the channel was meant to reach.
+
+    """
+    if FORWARDING_REFUSED not in connection.output:
+        pytest.fail(
+            f"sshd did not refuse the channel from its forwarding policy: "
+            f"{connection.describe()}",
             pytrace=False,
         )
 

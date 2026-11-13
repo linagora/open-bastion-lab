@@ -17,6 +17,8 @@ CONNECT_TIMEOUT = 10
 AUTHENTICATION_REFUSED = "Permission denied"
 CONNECTION_CLOSED = "Connection closed by"
 CERTIFICATE_REFUSED = "refused to issue a certificate"
+# What sshd answers a client that asks for a channel it does not forward.
+FORWARDING_REFUSED = "administratively prohibited"
 
 # Failures of the attempt itself, which decide nothing about the fleet.
 UNREACHABLE = (
@@ -60,6 +62,11 @@ class SshResult:
     @property
     def succeeded(self) -> bool:
         return self.returncode == 0
+
+    @property
+    def output(self) -> str:
+        """What the attempt printed, whichever stream it printed it on."""
+        return self.stdout + self.stderr
 
     @property
     def denied(self) -> bool:
@@ -142,6 +149,67 @@ class HopResult:
         return (
             f"ob-ssh {self.backend} from {self.bastion} as {self.user} "
             f"(ssh exit {self.returncode}), bastion {bastion}\n"
+            f"{self.stdout.strip()}\n{self.stderr.strip()}\nsee {self.log}"
+        )
+
+
+@dataclass
+class ChannelResult:
+    """What a channel the bastion opened for a user did.
+
+    The bastion dials the target and relays, vouching for nothing: what
+    comes back is the answer of whatever listens on the port. An sshd that
+    does not forward answers the channel request with "administratively
+    prohibited" instead, and the client prints it.
+
+    """
+
+    user: str
+    bastion: str
+    target: str
+    port: int
+    returncode: int
+    stdout: str
+    stderr: str
+    log: Path
+
+    @property
+    def succeeded(self) -> bool:
+        """True when the channel carried the exchange to its end."""
+        return self.returncode == 0
+
+    @property
+    def output(self) -> str:
+        """What the attempt printed, whichever stream it printed it on."""
+        return self.stdout + self.stderr
+
+    @property
+    def denied(self) -> bool:
+        """True when the fleet refused the channel.
+
+        The bastion refusing to forward and the target refusing the user
+        both count. A target that cannot be reached fails without deciding
+        anything: the bastion answered the request, but nothing on the
+        fleet refused the user, so it is not read as a refusal.
+
+        """
+        if self.succeeded:
+            return False
+        if _unreachable(self.output):
+            return False
+        return any(
+            marker in self.output
+            for marker in (
+                AUTHENTICATION_REFUSED,
+                CONNECTION_CLOSED,
+                FORWARDING_REFUSED,
+            )
+        )
+
+    def describe(self) -> str:
+        return (
+            f"ssh -W {self.target}:{self.port} from {self.bastion} "
+            f"as {self.user} (ssh exit {self.returncode})\n"
             f"{self.stdout.strip()}\n{self.stderr.strip()}\nsee {self.log}"
         )
 
@@ -458,6 +526,79 @@ class User:
         """Have sudo forget the elevation the user got on a backend earlier."""
         return self._sudo(bastion, backend, f"ob-ssh {backend} 'sudo -k'", ssh_config)
 
+    def forward(
+        self, bastion: str, target: str, port: int, ssh_config: Path, request: str
+    ) -> ChannelResult:
+        """Write a request through a channel the bastion opens to a port.
+
+        The channel is the one ``ssh -L`` forwards a local port through,
+        and the one ProxyJump rides: the bastion dials the target and
+        relays, vouching for nothing. What is read back is the answer of
+        whatever listens there, or the refusal of an sshd that does not
+        forward.
+
+        """
+        log = self.home / f"forward-{bastion}-{target}-{port}.log"
+        args = self._base_args(ssh_config) + [
+            "-W",
+            f"{target}:{port}",
+            f"{self.name}@{bastion}",
+        ]
+        result = command.run(args, stdin=request, timeout=60.0)
+        command.write_log(log, args, result)
+        LOGGER.debug(
+            "ssh -W %s:%s from %s as %s returned %s",
+            target,
+            port,
+            bastion,
+            self.name,
+            result.returncode,
+        )
+        return ChannelResult(
+            user=self.name,
+            bastion=bastion,
+            target=target,
+            port=port,
+            returncode=result.returncode,
+            stdout=result.stdout,
+            stderr=result.stderr,
+            log=log,
+        )
+
+    def proxy_jump(self, bastion: str, backend: str, ssh_config: Path) -> SshResult:
+        """Reach a backend with ProxyJump, as a user would without ob-ssh.
+
+        The bastion relays the connection and nothing more: the
+        certificate the client presents to the backend is the user's own,
+        which no bastion vouched for.
+
+        """
+        log = self.home / f"proxy-jump-{bastion}-{backend}.log"
+        args = self._base_args(ssh_config) + [
+            "-J",
+            f"{self.name}@{bastion}",
+            f"{self.name}@{backend}",
+            "true",
+        ]
+        result = command.run(args, timeout=120.0)
+        command.write_log(log, args, result)
+        LOGGER.debug(
+            "ssh -J %s %s as %s returned %s",
+            bastion,
+            backend,
+            self.name,
+            result.returncode,
+        )
+        return SshResult(
+            user=self.name,
+            host=backend,
+            returncode=result.returncode,
+            stdout=result.stdout,
+            stderr=result.stderr,
+            signed=self.signed(),
+            log=log,
+        )
+
     @staticmethod
     def _sudo_command(token: str) -> str:
         """The command that gives sudo the one-time token of the portal.
@@ -490,10 +631,9 @@ class User:
             log=log,
         )
 
-    def _run(
-        self, host: str, ssh_config: Path, remote: str, log: Path
-    ) -> subprocess.CompletedProcess[str]:
-        args = [
+    def _base_args(self, ssh_config: Path) -> list[str]:
+        """The ssh invocation every attempt of this user starts from."""
+        return [
             command.which("ssh"),
             "-F",
             str(ssh_config),
@@ -505,9 +645,12 @@ class User:
             "BatchMode=yes",
             "-o",
             f"ConnectTimeout={CONNECT_TIMEOUT}",
-            f"{self.name}@{host}",
-            remote,
         ]
+
+    def _run(
+        self, host: str, ssh_config: Path, remote: str, log: Path
+    ) -> subprocess.CompletedProcess[str]:
+        args = self._base_args(ssh_config) + [f"{self.name}@{host}", remote]
         result = command.run(args, timeout=120.0)
         command.write_log(log, args, result)
         return result

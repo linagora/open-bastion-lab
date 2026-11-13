@@ -342,9 +342,14 @@ def user_ssh_config(scenario_dir: Path, local_user_home: Path) -> Path:
     """The ssh configuration of the scenario.
 
     It reads the keys of the scenario first, then those the feature copied
-    to a machine before it was configured. Both are pointed at by an
-    absolute path: ssh expands ``~`` from the passwd database, not from
-    ``HOME``, so a configuration file cannot be told to look elsewhere.
+    to a machine before it was configured, and it anchors the hosts the
+    scenario meets in its own known_hosts. All of them by an absolute
+    path: ssh expands ``~`` from the passwd database, not from ``HOME``,
+    so a configuration file cannot be told to look elsewhere.
+
+    The host key policy lives here rather than on the command line: ssh
+    reads this file again for the jump host of a ProxyJump, and the options
+    given to the client do not reach that connection.
 
     """
     scenario_keys = scenario_dir / "ssh" / ".ssh"
@@ -357,6 +362,10 @@ def user_ssh_config(scenario_dir: Path, local_user_home: Path) -> Path:
             'IdentityFile "~/.ssh/id_%r"',
             f'IdentityFile "{scenario_keys}/id_%r"\n    '
             f'IdentityFile "{copied_keys}/id_%r"',
+        )
+        .replace(
+            'UserKnownHostsFile "~/.ssh/known_hosts"',
+            f'UserKnownHostsFile "{scenario_keys}/known_hosts"',
         )
     )
     return path
