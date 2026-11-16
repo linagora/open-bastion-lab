@@ -14,3 +14,6 @@ __pycache__
 /examples/oidc-public.pem
 /examples/ssh-ca.key
 /examples/ssh-ca.pub
+
+# testing unreleased LLNG plugin code
+/examples/docker-compose.override.yml

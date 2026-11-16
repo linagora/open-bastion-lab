@@ -1,0 +1,87 @@
+# Unreleased LLNG plugin code in the fleet's portal
+#
+# Usage:
+#
+#   cd examples/
+#   cp docker-compose.override.yml.example docker-compose.override.yml
+#   OB_PLUGINS=$(pwd)/Projects/open-bastion/llng/plugins \
+#     docker compose up -d
+#
+# OB_PLUGINS is the plugins/ directory to take the code from; the
+# default is the sibling checkout the rest of the suite expects.
+
+# One line per file, never a directory: the package installs each plugin file
+# inside LLNG's own tree, so a mount over portal/templates/bootstrap or over
+# Portal/Plugins would hide LLNG's own files and break the portal.
+services:
+  llng:
+    volumes:
+      - ${OB_PLUGINS:-../../../../open-bastion/llng/plugins}:/opt/ob-plugins:ro
+
+      # ssh-ca
+      - ${OB_PLUGINS:-../../../../open-bastion/llng/plugins}/ssh-ca/lib/Lemonldap/NG/Portal/Plugins/SSHCA.pm:/usr/share/perl5/Lemonldap/NG/Portal/Plugins/SSHCA.pm:ro
+      - ${OB_PLUGINS:-../../../../open-bastion/llng/plugins}/ssh-ca/portal-templates/bootstrap/sshca.tpl:/usr/share/lemonldap-ng/portal/templates/bootstrap/sshca.tpl:ro
+      - ${OB_PLUGINS:-../../../../open-bastion/llng/plugins}/ssh-ca/portal-templates/bootstrap/sshcaadmin.tpl:/usr/share/lemonldap-ng/portal/templates/bootstrap/sshcaadmin.tpl:ro
+      - ${OB_PLUGINS:-../../../../open-bastion/llng/plugins}/ssh-ca/portal-static/common/js/sshca.js:/usr/share/lemonldap-ng/portal/htdocs/static/common/js/sshca.js:ro
+      - ${OB_PLUGINS:-../../../../open-bastion/llng/plugins}/ssh-ca/portal-static/common/js/sshca.min.js:/usr/share/lemonldap-ng/portal/htdocs/static/common/js/sshca.min.js:ro
+      - ${OB_PLUGINS:-../../../../open-bastion/llng/plugins}/ssh-ca/portal-static/common/js/sshca.min.js.map:/usr/share/lemonldap-ng/portal/htdocs/static/common/js/sshca.min.js.map:ro
+      - ${OB_PLUGINS:-../../../../open-bastion/llng/plugins}/ssh-ca/portal-static/common/js/sshcaadmin.js:/usr/share/lemonldap-ng/portal/htdocs/static/common/js/sshcaadmin.js:ro
+      - ${OB_PLUGINS:-../../../../open-bastion/llng/plugins}/ssh-ca/portal-static/common/js/sshcaadmin.min.js:/usr/share/lemonldap-ng/portal/htdocs/static/common/js/sshcaadmin.min.js:ro
+      - ${OB_PLUGINS:-../../../../open-bastion/llng/plugins}/ssh-ca/portal-static/common/js/sshcaadmin.min.js.map:/usr/share/lemonldap-ng/portal/htdocs/static/common/js/sshcaadmin.min.js.map:ro
+      - ${OB_PLUGINS:-../../../../open-bastion/llng/plugins}/ssh-ca/portal-translations:/usr/share/lemonldap-ng/portal/plugin-translations/ssh-ca:ro
+      - ${OB_PLUGINS:-../../../../open-bastion/llng/plugins}/ssh-ca/manager-overrides/ssh-ca.json:/etc/lemonldap-ng/manager-overrides.d/ssh-ca.json:ro
+
+      # pam-access
+      - ${OB_PLUGINS:-../../../../open-bastion/llng/plugins}/pam-access/lib/Lemonldap/NG/Portal/Plugins/PamAccess.pm:/usr/share/perl5/Lemonldap/NG/Portal/Plugins/PamAccess.pm:ro
+      - ${OB_PLUGINS:-../../../../open-bastion/llng/plugins}/pam-access/portal-templates/bootstrap/pamaccess.tpl:/usr/share/lemonldap-ng/portal/templates/bootstrap/pamaccess.tpl:ro
+      - ${OB_PLUGINS:-../../../../open-bastion/llng/plugins}/pam-access/portal-static/common/js/pamaccess.js:/usr/share/lemonldap-ng/portal/htdocs/static/common/js/pamaccess.js:ro
+      - ${OB_PLUGINS:-../../../../open-bastion/llng/plugins}/pam-access/portal-static/common/js/pamaccess.min.js:/usr/share/lemonldap-ng/portal/htdocs/static/common/js/pamaccess.min.js:ro
+      - ${OB_PLUGINS:-../../../../open-bastion/llng/plugins}/pam-access/portal-static/common/js/pamaccess.min.js.map:/usr/share/lemonldap-ng/portal/htdocs/static/common/js/pamaccess.min.js.map:ro
+      - ${OB_PLUGINS:-../../../../open-bastion/llng/plugins}/pam-access/portal-translations:/usr/share/lemonldap-ng/portal/plugin-translations/pam-access:ro
+      - ${OB_PLUGINS:-../../../../open-bastion/llng/plugins}/pam-access/manager-overrides/pam-access.json:/etc/lemonldap-ng/manager-overrides.d/pam-access.json:ro
+
+      # oidc-device-authorization
+      - ${OB_PLUGINS:-../../../../open-bastion/llng/plugins}/oidc-device-authorization/lib/Lemonldap/NG/Portal/Plugins/OIDCDeviceAuthorization.pm:/usr/share/perl5/Lemonldap/NG/Portal/Plugins/OIDCDeviceAuthorization.pm:ro
+      - ${OB_PLUGINS:-../../../../open-bastion/llng/plugins}/oidc-device-authorization/portal-templates/bootstrap/device.tpl:/usr/share/lemonldap-ng/portal/templates/bootstrap/device.tpl:ro
+      - ${OB_PLUGINS:-../../../../open-bastion/llng/plugins}/oidc-device-authorization/portal-translations:/usr/share/lemonldap-ng/portal/plugin-translations/oidc-device-authorization:ro
+      - ${OB_PLUGINS:-../../../../open-bastion/llng/plugins}/oidc-device-authorization/manager-overrides/device-authorization.json:/etc/lemonldap-ng/manager-overrides.d/device-authorization.json:ro
+
+      # oidc-device-organization
+      - ${OB_PLUGINS:-../../../../open-bastion/llng/plugins}/oidc-device-organization/lib/Lemonldap/NG/Portal/Plugins/OIDCDeviceOrganization.pm:/usr/share/perl5/Lemonldap/NG/Portal/Plugins/OIDCDeviceOrganization.pm:ro
+      - ${OB_PLUGINS:-../../../../open-bastion/llng/plugins}/oidc-device-organization/manager-overrides/device-organization.json:/etc/lemonldap-ng/manager-overrides.d/device-organization.json:ro
+
+# Two things a mount cannot do, both run in the container after `up -d`.
+#
+# 1. Translations are merged, not installed: the package's postinst folds each
+#    plugin-translations/<name> directory into the portal's own language files,
+#    adding the keys they are missing and keeping the ones already there -- the
+#    `//=` below is that rule, so a *reworded* label keeps the old text and
+#    only a new key appears.
+#
+#      docker compose -f open_bastion_tests/data/llng/docker-compose.yml exec llng \
+#        perl -MJSON -e '
+#          my $dir = "/usr/share/lemonldap-ng/portal/htdocs/static/languages";
+#          for my $src (glob "/usr/share/lemonldap-ng/portal/plugin-translations/*/*.json") {
+#            my ($lang) = $src =~ m{([^/]+)$};
+#            my $dst = "$dir/$lang";
+#            next unless -f $dst;
+#            my ($base, $ext);
+#            { local $/; open my $f, "<", $dst or next; $base = decode_json(<$f>) }
+#            { local $/; open my $f, "<", $src or next; $ext  = decode_json(<$f>) }
+#            $base->{$_} //= $ext->{$_} for keys %$ext;
+#            open my $o, ">", $dst or die $!;
+#            print $o JSON->new->utf8->pretty->canonical->encode($base);
+#          }'
+#
+# 2. The manager knows the settings a plugin declares in manager-overrides only
+#    once its files are rebuilt -- the image does it at build time:
+#
+#      docker compose -f open_bastion_tests/data/llng/docker-compose.yml exec llng \
+#        sh -c 'export LLNG_DEFAULTCONFFILE=/etc/lemonldap-ng/lemonldap-ng.ini;
+#               /usr/share/lemonldap-ng/bin/lemonldap-ng-store rebuild'
+#
+# A plugin's scripts/ directory is installed by no package (the ssh-ca README
+# still names the path a cron job would use): run the ones you need straight
+# out of the read-only tree --
+#   docker compose -f open_bastion_tests/data/llng/docker-compose.yml exec llng \
+#     /opt/ob-plugins/ssh-ca/scripts/sshca-rebuild-krl
